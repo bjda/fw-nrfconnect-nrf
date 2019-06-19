@@ -15,6 +15,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(gps_control, CONFIG_GPS_CONTROL_LOG_LEVEL);
 
+#if !defined(CONFIG_GPS_SIM)
 /* Structure to hold GPS work information */
 static struct {
 	enum {
@@ -29,7 +30,6 @@ static struct {
 
 static void gps_work_handler(struct k_work *work)
 {
-#if !defined(CONFIG_GPS_SIM)
 	int err;
 
 	if (gps_work.type == GPS_WORK_START) {
@@ -88,8 +88,8 @@ static void gps_work_handler(struct k_work *work)
 			K_SECONDS(CONFIG_GPS_CONTROL_FIX_CHECK_INTERVAL));
 		return;
 	}
-#endif
 }
+#endif /* !defined(GPS_SIM) */
 
 void gps_control_stop(u32_t delay_ms)
 {
@@ -110,9 +110,11 @@ void gps_control_start(u32_t delay_ms)
 void gps_control_on_trigger(void)
 {
 #if !defined(CONFIG_GPS_SIM)
+	k_delayed_work_cancel(&gps_work.work);
+
 	if (++gps_work.fix_count == CONFIG_GPS_CONTROL_FIX_COUNT) {
 		gps_work.fix_count = 0;
-		k_delayed_work_cancel(&gps_work.work);
+		gps_control_stop(K_NO_WAIT);
 	}
 #endif
 }
