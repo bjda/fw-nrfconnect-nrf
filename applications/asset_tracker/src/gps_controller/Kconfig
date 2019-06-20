@@ -11,8 +11,6 @@ config GPS_CONTROL
 	default y if BOARD_NRF9160_PCA20035NS
 	select NRF9160_GPS
 
-if GPS_CONTROL
-
 config GPS_CONTROL_PSM_ENABLE_ON_START
 	bool "Enable PSM when starting GPS"
 	default y
@@ -80,8 +78,6 @@ config GPS_CONTROL_MAX_FAILED_FIX_ATTEMPTS
 module = GPS_CONTROL
 module-str = GPS controller
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
-
-endif # GPS_CONTROL
 
 endmenu
 

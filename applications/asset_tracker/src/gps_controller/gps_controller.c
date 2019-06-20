@@ -55,7 +55,7 @@ static void gps_work_handler(struct k_work *work)
 		printk("to get position fix. This may take several minutes.\n");
 		printk("The device will attempt to get a fix for %d seconds, ",
 		       CONFIG_GPS_CONTROL_FIX_TRY_TIME);
-		printk("before the GPS is shut down.\n");
+		printk("before the GPS is stopped.\n");
 
 		gps_work.type = GPS_WORK_STOP;
 
@@ -110,8 +110,6 @@ void gps_control_start(u32_t delay_ms)
 void gps_control_on_trigger(void)
 {
 #if !defined(CONFIG_GPS_SIM)
-	k_delayed_work_cancel(&gps_work.work);
-
 	if (++gps_work.fix_count == CONFIG_GPS_CONTROL_FIX_COUNT) {
 		gps_work.fix_count = 0;
 		gps_control_stop(K_NO_WAIT);
