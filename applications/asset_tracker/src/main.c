@@ -140,9 +140,9 @@ static bool flip_mode_enabled = true;
 /* Structures for work */
 static struct k_work connect_work;
 static struct k_work send_gps_data_work;
-static struct k_work send_env_data_work;
 static struct k_work send_button_data_work;
 static struct k_work send_flip_data_work;
+static struct k_delayed_work send_env_data_work;
 static struct k_delayed_work flip_poll_work;
 static struct k_delayed_work long_press_button_work;
 static struct k_delayed_work cloud_reboot_work;
@@ -279,12 +279,13 @@ void bsd_irrecoverable_error_handler(uint32_t err)
 static void send_gps_data_work_fn(struct k_work *work)
 {
 	sensor_data_send(&gps_cloud_data);
-	env_data_send();
 }
 
 static void send_env_data_work_fn(struct k_work *work)
 {
 	env_data_send();
+	k_delayed_work_submit(&send_env_data_work,
+		K_SECONDS(CONFIG_ENVIRONMENT_DATA_SEND_INTERVAL));
 }
 
 static void send_button_data_work_fn(struct k_work *work)
@@ -845,9 +846,9 @@ static void work_init(void)
 {
 	k_work_init(&connect_work, app_connect);
 	k_work_init(&send_gps_data_work, send_gps_data_work_fn);
-	k_work_init(&send_env_data_work, send_env_data_work_fn);
 	k_work_init(&send_button_data_work, send_button_data_work_fn);
 	k_work_init(&send_flip_data_work, send_flip_data_work_fn);
+	k_delayed_work_init(&send_env_data_work, send_env_data_work_fn);
 	k_delayed_work_init(&flip_poll_work, flip_send);
 	k_delayed_work_init(&long_press_button_work, accelerometer_calibrate);
 	k_delayed_work_init(&cloud_reboot_work, cloud_reboot_handler);
@@ -1000,14 +1001,14 @@ static void sensors_init(void)
 		button_sensor_init();
 	}
 
-	gps_control_init(gps_trigger_handler);
+	// gps_control_init(gps_trigger_handler);
 
 	flip_cloud_data.type = CLOUD_CHANNEL_FLIP;
 
 	/* Send sensor data after initialization, as it may be a long time until
 	 * next time if the application is in power optimized mode.
 	 */
-	env_data_send();
+	k_delayed_work_submit(&send_env_data_work, K_NO_WAIT);
 }
 
 #if defined(CONFIG_USE_UI_MODULE)
