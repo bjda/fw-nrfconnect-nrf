@@ -315,6 +315,8 @@ static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 
 	fix_count = 0;
 
+	ui_led_set_pattern(UI_LED_GPS_FIX);
+
 	gps_sample_fetch(dev);
 	gps_channel_get(dev, GPS_CHAN_NMEA, &gps_data);
 	gps_cloud_data.data.buf = gps_data.nmea.buf;
@@ -520,7 +522,7 @@ static void env_data_send(void)
 	int err;
 	u8_t len;
 
-	if (!atomic_get(&send_data_enable)) {
+	if (!atomic_get(&send_data_enable) || gps_control_is_active()) {
 		return;
 	}
 
@@ -830,11 +832,9 @@ static void pairing_button_register(struct ui_evt *evt)
 static void long_press_handler(struct k_work *work)
 {
 	if (gps_control_is_enabled()) {
-		ui_led_set_pattern(UI_CLOUD_CONNECTED);
 		printk("Stopping GPS\n");
 		gps_control_disable();
 	} else {
-		ui_led_set_color(100, 0, 100);
 		printk("Starting GPS\n");
 		gps_control_enable();
 		gps_control_start(K_SECONDS(1));
