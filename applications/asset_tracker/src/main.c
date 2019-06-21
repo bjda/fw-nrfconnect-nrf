@@ -283,8 +283,6 @@ static void send_gps_data_work_fn(struct k_work *work)
 static void send_env_data_work_fn(struct k_work *work)
 {
 	env_data_send();
-	k_delayed_work_submit(&send_env_data_work,
-		K_SECONDS(CONFIG_ENVIRONMENT_DATA_SEND_INTERVAL));
 }
 
 static void send_button_data_work_fn(struct k_work *work)
@@ -329,6 +327,7 @@ static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 
 	gps_control_stop(K_NO_WAIT);
 	k_work_submit(&send_gps_data_work);
+	k_delayed_work_submit(&send_env_data_work, K_NO_WAIT);
 }
 
 /**@brief Callback for sensor trigger events */
@@ -522,9 +521,18 @@ static void env_data_send(void)
 	int err;
 	u8_t len;
 
-	if (!atomic_get(&send_data_enable) || gps_control_is_active()) {
+	if (!atomic_get(&send_data_enable)) {
 		return;
 	}
+
+	if (gps_control_is_active()) {
+		k_delayed_work_submit(&send_env_data_work,
+			K_SECONDS(CONFIG_ENVIRONMENT_DATA_BACKOFF_TIME));
+		return;
+	}
+
+	k_delayed_work_submit(&send_env_data_work,
+		K_SECONDS(CONFIG_ENVIRONMENT_DATA_SEND_INTERVAL));
 
 	/* If the BME680 is being used, all data has to be fetched at once */
 	if (IS_ENABLED(CONFIG_BME680)) {
