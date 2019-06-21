@@ -21,6 +21,8 @@
 #include "orientation_detector.h"
 #include "ui.h"
 
+#include "birdhouse.h"
+
 #define CALIBRATION_PRESS_DURATION 	K_SECONDS(5)
 
 #if defined(CONFIG_FLIP_POLL)
@@ -49,17 +51,6 @@
 #define CLOUD_DOOR_OPEN_STR "{\"door\":\"open\"}"
 #define CLOUD_DOOR_LOCK_STR "{\"lock\":\"lock\"}"
 #define CLOUD_DOOR_UNLOCK_STR "{\"lock\":\"unlock\"}"
-
-/* Constants for servo operation. All time units are us. */
-#define PWM_PERIOD 20000
-#define DOOR_PWM_NMOS_ID UI_NMOS_1
-#define LOCK_PWM_NMOS_ID UI_NMOS_2
-#define DOOR_PWR_NMOS_ID UI_NMOS_3
-#define LOCK_PWR_NMOS_ID UI_NMOS_4
-#define DOOR_PWM_WIDTH_CLOSE 1930
-#define DOOR_PWM_WIDTH_OPEN 1020
-#define LOCK_PWM_WIDTH_LOCK 1930
-#define LOCK_PWM_WIDTH_UNLOCK 1020
 
 
 #if defined(CONFIG_BSD_LIBRARY) && !defined(CONFIG_LTE_LINK_CONTROL)
@@ -548,20 +539,16 @@ static void on_data_received(const struct nrf_cloud_evt *p_evt)
 #endif /* CONFIG_UI_LED_USE_PWM */
 	} else if (memcmp(p_evt->param.data.ptr, CLOUD_DOOR_CLOSE_STR,
 		strlen(CLOUD_DOOR_CLOSE_STR)) == 0) {
-		ui_nmos_pwm_set(DOOR_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - DOOR_PWM_WIDTH_CLOSE);
+		birdhouse_close();
 	} else if (memcmp(p_evt->param.data.ptr, CLOUD_DOOR_OPEN_STR,
 		strlen(CLOUD_DOOR_OPEN_STR)) == 0) {
-		ui_nmos_pwm_set(DOOR_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - DOOR_PWM_WIDTH_OPEN);
+		birdhouse_open();
 	} else if (memcmp(p_evt->param.data.ptr, CLOUD_DOOR_LOCK_STR,
 		strlen(CLOUD_DOOR_LOCK_STR)) == 0) {
-		ui_nmos_pwm_set(LOCK_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - LOCK_PWM_WIDTH_LOCK);
+		birdhouse_lock();
 	} else if (memcmp(p_evt->param.data.ptr, CLOUD_DOOR_UNLOCK_STR,
 		strlen(CLOUD_DOOR_UNLOCK_STR)) == 0) {
-		ui_nmos_pwm_set(LOCK_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - LOCK_PWM_WIDTH_UNLOCK);
+		birdhouse_unlock();
 	} else {
 		printk("Data not recognised\n");
 	}
@@ -1029,16 +1016,7 @@ void main(void)
 	k_sleep(1000);
 	printk("Application started\n");
 	ui_init(button_handler);
-	
-	/* Servo initialization. cycle value is low time */
-	ui_nmos_pwm_set(DOOR_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - DOOR_PWM_WIDTH_CLOSE);
-	ui_nmos_pwm_set(LOCK_PWM_NMOS_ID, PWM_PERIOD, 
-						PWM_PERIOD - LOCK_PWM_WIDTH_LOCK);
-    k_usleep(2 * PWM_PERIOD); /* wait for stable PWM before powering servos */
-	ui_nmos_write(DOOR_PWR_NMOS_ID, 1);
-	ui_nmos_write(LOCK_PWR_NMOS_ID, 1);
-
+	birdhouse_init();
 	work_init();
 	cloud_init();
 	modem_configure();
