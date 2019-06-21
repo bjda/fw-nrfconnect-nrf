@@ -9,6 +9,7 @@
 #include <gps.h>
 #include <lte_lc.h>
 
+#include "ui.h"
 #include "gps_controller.h"
 
 
@@ -29,28 +30,7 @@ static struct {
 static atomic_t gps_is_active;
 static atomic_t gps_is_enabled;
 
-static void stop(void)
-{
-	int err;
-
-	if (IS_ENABLED(CONFIG_GPS_CONTROL_PSM_DISABLE_ON_STOP)) {
-		printk("Disabling PSM\n");
-
-		err = lte_lc_psm_req(false);
-		if(err) {
-			printk("PSM mode could not be disabled\n");
-		}
-	}
-
-	err = gps_stop(gps_work.dev);
-	if (err) {
-		printk("GPS could not be stopped, error: %d\n", err);
-		return;
-	}
-
-}
-
-static void start(void)
+static int start(void)
 {
 	int err;
 
@@ -70,8 +50,7 @@ static void start(void)
 
 	err = gps_start(gps_work.dev);
 	if (err) {
-		printk("GPS could not be started, error: %d\n", err);
-		return;
+		return err;
 	}
 
 	atomic_set(&gps_is_active, 1);
@@ -81,12 +60,46 @@ static void start(void)
 	printk("The device will attempt to get a fix for %d seconds, ",
 		CONFIG_GPS_CONTROL_FIX_TRY_TIME);
 	printk("before the GPS is stopped.\n");
+
+	return 0;
+}
+
+static int stop(void)
+{
+	int err;
+
+	if (IS_ENABLED(CONFIG_GPS_CONTROL_PSM_DISABLE_ON_STOP)) {
+		printk("Disabling PSM\n");
+
+		err = lte_lc_psm_req(false);
+		if(err) {
+			printk("PSM mode could not be disabled\n");
+		}
+	}
+
+	err = gps_stop(gps_work.dev);
+	if (err) {
+		return err;
+	}
+
+	return 0;
 }
 
 static void gps_work_handler(struct k_work *work)
 {
+	int err;
+
 	if (gps_work.type == GPS_WORK_START) {
-		start();
+		err = start();
+		if (err) {
+			printk("GPS could not be started, error: %d\n", err);
+			return;
+		}
+
+		printk("GPS operation started\n");
+
+		atomic_set(&gps_is_active, 1);
+		ui_led_set_pattern(UI_LED_GPS_SEARCHING);
 
 		gps_work.type = GPS_WORK_STOP;
 
@@ -95,15 +108,23 @@ static void gps_work_handler(struct k_work *work)
 
 		return;
 	} else if (gps_work.type == GPS_WORK_STOP) {
-		stop();
+		err = stop();
+		if (err) {
+			printk("GPS could not be stopped, error: %d\n", err);
+			return;
+		}
+
+		printk("GPS operation was stopped\n");
 
 		atomic_set(&gps_is_active, 0);
-
-		gps_work.type = GPS_WORK_START;
+		ui_led_set_pattern(UI_CLOUD_CONNECTED);
 
 		if (atomic_get(&gps_is_enabled) == 0) {
 			return;
 		}
+
+		gps_work.type = GPS_WORK_START;
+
 
 		printk("The device will try to get fix again in %d seconds\n",
 			CONFIG_GPS_CONTROL_FIX_CHECK_INTERVAL);
