@@ -17,6 +17,8 @@
 #include <zephyr.h>
 #include <dk_buttons_and_leds.h>
 
+#include "led_effect.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,6 +74,8 @@ extern "C" {
 #define UI_LED_ERROR_BSD_IRREC_COLOR	UI_LED_COLOR_RED
 #define UI_LED_ERROR_LTE_LC_COLOR	UI_LED_COLOR_RED
 #define UI_LED_ERROR_UNKNOWN_COLOR	UI_LED_COLOR_WHITE
+#define UI_LED_GPS_SEARCHING_COLOR	UI_LED_COLOR_PURPLE
+#define UI_LED_GPS_FIX_COLOR		UI_LED_COLOR_YELLOW
 
 #else
 
@@ -95,6 +99,8 @@ enum ui_led_pattern {
 	UI_LED_ERROR_BSD_IRREC,
 	UI_LED_ERROR_LTE_LC,
 	UI_LED_ERROR_UNKNOWN,
+	UI_LED_GPS_SEARCHING,
+	UI_LED_GPS_FIX
 #else /* LED patterns without using PWM. */
 	UI_LTE_DISCONNECTED	= UI_LED_ON(0),
 	UI_LTE_CONNECTING	= UI_LED_BLINK(DK_LED3_MSK),
