@@ -117,7 +117,6 @@ static void gps_work_handler(struct k_work *work)
 		printk("GPS operation was stopped\n");
 
 		atomic_set(&gps_is_active, 0);
-		ui_led_set_pattern(UI_CLOUD_CONNECTED);
 
 		if (atomic_get(&gps_is_enabled) == 0) {
 			return;
@@ -162,6 +161,7 @@ void gps_control_disable(void)
 #if !defined(CONFIG_GPS_SIM)
 	atomic_set(&gps_is_enabled, 0);
 	gps_control_stop(K_NO_WAIT);
+	ui_led_set_pattern(UI_CLOUD_CONNECTED);
 #endif
 }
 
