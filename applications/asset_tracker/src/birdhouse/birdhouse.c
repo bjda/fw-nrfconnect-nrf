@@ -5,6 +5,7 @@
  */
 
 /* Constants for servo operation. All time units are us. */
+#include <assert.h>
 #include "birdhouse.h"
 
 #include "ui.h"
@@ -25,9 +26,11 @@
 #define BOTH_OPERATION_TIME_MS 500
 
 /* Time to wait for servo to be inoperable after power loss */
-#define DOOR_DISSIPATE_TIME_MS 500
-#define LOCK_DISSIPATE_TIME_MS 500
-#define BOTH_DISSIPATE_TIME_MS 500
+#define DOOR_DISSIPATE_TIME_MS 50
+#define LOCK_DISSIPATE_TIME_MS 50
+#define BOTH_DISSIPATE_TIME_MS 50
+
+static enum state_t {LOCKED, CLOSED, OPEN} state;
 
 void operate_door(u32_t target_width){
 	ui_nmos_pwm_set(DOOR_PWM_NMOS_ID, PWM_PERIOD, 
@@ -51,23 +54,91 @@ void operate_lock(u32_t target_width){
 	ui_nmos_write(LOCK_PWM_NMOS_ID, 0);
 }
 
-void birdhouse_close(){
+void internal_close(){
 	operate_door(DOOR_PWM_WIDTH_CLOSE);
+	state = CLOSED;
 }
 
-void birdhouse_open(){
+void internal_open(){
 	operate_door(DOOR_PWM_WIDTH_OPEN);
+	state = OPEN;
 }
 
-void birdhouse_lock(){
+void internal_lock(){
 	operate_lock(LOCK_PWM_WIDTH_LOCK);
+	state = LOCKED;
 }
 
-void birdhouse_unlock(){
+void internal_unlock(){
 	operate_lock(LOCK_PWM_WIDTH_UNLOCK);
+	state = CLOSED; // The unlocked door is still closed
 }
 
-void birdhouse_init(){
+int birdhouse_lock(){
+	switch (state) {
+		case LOCKED:
+		break;
+		case CLOSED:
+			internal_lock();
+		break;
+		case OPEN:
+			internal_close();
+			internal_lock();
+		break;
+		default:
+			return -ENOTRECOVERABLE;
+	}
+	return 0;
+}
+
+int birdhouse_unlock(){
+	switch (state) {
+		case LOCKED:
+			internal_unlock();
+		break;
+		case CLOSED:
+		break;
+		case OPEN:
+		break;
+		default:
+			return -ENOTRECOVERABLE;
+	}
+	return 0;
+}
+
+int birdhouse_close(){
+	switch (state) {
+		case LOCKED:
+		break;
+		case CLOSED:
+		break;
+		case OPEN:
+			internal_close();
+		break;
+		default:
+			return -ENOTRECOVERABLE;
+	}
+	return 0;
+}
+
+int birdhouse_open(){
+	switch (state) {
+		case LOCKED:
+			internal_unlock();
+			internal_open();
+		break;
+		case CLOSED:
+			internal_open();
+		break;
+		case OPEN:
+		break;
+		default:
+			return -ENOTRECOVERABLE;
+	}
+	return 0;
+}
+
+int birdhouse_init(){
 	/* Servo initialization. cycle value is low time */
 	ui_nmos_pwm_set(DOOR_PWM_NMOS_ID, PWM_PERIOD, 
 						PWM_PERIOD - DOOR_PWM_WIDTH_CLOSE);
@@ -82,4 +153,6 @@ void birdhouse_init(){
 	k_usleep(LOCK_DISSIPATE_TIME_MS);
 	ui_nmos_write(DOOR_PWM_NMOS_ID, 0);
 	ui_nmos_write(LOCK_PWM_NMOS_ID, 0);
+	state = LOCKED;
+	return 0;
 }

@@ -17,11 +17,11 @@
 extern "C" {
 #endif
 
-void birdhouse_close();
-void birdhouse_open();
-void birdhouse_lock();
-void birdhouse_unlock();
-void birdhouse_init();
+int birdhouse_close();
+int birdhouse_open();
+int birdhouse_lock();
+int birdhouse_unlock();
+int birdhouse_init();
 
 #ifdef __cplusplus
 }
