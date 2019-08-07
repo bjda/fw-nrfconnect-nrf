@@ -25,6 +25,7 @@
 #include "cloud_codec.h"
 #include "orientation_detector.h"
 #include "ui.h"
+#include "gps_controller.h"
 
 #define CALIBRATION_PRESS_DURATION 	K_SECONDS(5)
 #define CLOUD_CONNACK_WAIT_DURATION	K_SECONDS(CONFIG_CLOUD_WAIT_DURATION)
@@ -305,6 +306,8 @@ static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 	   || !atomic_get(&send_data_enable)) {
 		return;
 	}
+
+	gps_control_on_trigger();
 
 	gps_sample_fetch(dev);
 	gps_channel_get(dev, GPS_CHAN_NMEA, &gps_data);
@@ -913,40 +916,6 @@ static void accelerometer_init(void)
 	}
 }
 
-/**@brief Initializes GPS device and configures trigger if set.
- * Gets initial sample from GPS device.
- */
-static void gps_init(void)
-{
-	int err;
-	struct device *gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
-	struct gps_trigger gps_trig = {
-		.type = GPS_TRIG_DATA_READY,
-	};
-
-	if (gps_dev == NULL) {
-		printk("Could not get %s device\n", CONFIG_GPS_DEV_NAME);
-		return;
-	}
-	printk("GPS device found\n");
-
-	if (IS_ENABLED(CONFIG_GPS_TRIGGER)) {
-		err = gps_trigger_set(gps_dev, &gps_trig,
-				gps_trigger_handler);
-
-		if (err) {
-			printk("Could not set trigger, error code: %d\n", err);
-			return;
-		}
-	}
-
-	err = gps_sample_fetch(gps_dev);
-	__ASSERT(err == 0, "GPS sample could not be fetched.");
-
-	err = gps_channel_get(gps_dev, GPS_CHAN_NMEA, &nmea_data);
-	__ASSERT(err == 0, "GPS sample could not be retrieved.");
-}
-
 /**@brief Initializes flip detection using orientation detector module
  * and configured accelerometer device.
  */
@@ -1022,7 +991,6 @@ static void modem_data_init(void)
 static void sensors_init(void)
 {
 	accelerometer_init();
-	gps_init();
 	flip_detection_init();
 	env_sensor_init();
 #if CONFIG_MODEM_INFO
@@ -1032,17 +1000,13 @@ static void sensors_init(void)
 		button_sensor_init();
 	}
 
-	gps_cloud_data.type = CLOUD_CHANNEL_GPS;
-	gps_cloud_data.tag = 0x1;
-	gps_cloud_data.data.buf = gps_data.nmea.buf;
-	gps_cloud_data.data.len = gps_data.nmea.len;
+	gps_control_init(gps_trigger_handler);
 
 	flip_cloud_data.type = CLOUD_CHANNEL_FLIP;
 
 	/* Send sensor data after initialization, as it may be a long time until
 	 * next time if the application is in power optimized mode.
 	 */
-	k_work_submit(&send_gps_data_work);
 	env_data_send();
 }
 
