@@ -26,6 +26,14 @@ void gps_control_stop(u32_t delay_ms);
 
 void gps_control_start(u32_t delay_ms);
 
+bool gps_control_is_active(void);
+
+bool gps_control_is_enabled(void);
+
+void gps_control_enable(void);
+
+void gps_control_disable(void);
+
 #ifdef __cplusplus
 }
 #endif
