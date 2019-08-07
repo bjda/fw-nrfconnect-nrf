@@ -300,6 +300,8 @@ static void send_flip_data_work_fn(struct k_work *work)
 /**@brief Callback for GPS trigger events */
 static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 {
+	static u32_t fix_count;
+
 	ARG_UNUSED(trigger);
 
 	if (ui_button_is_active(UI_SWITCH_2)
@@ -307,7 +309,11 @@ static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 		return;
 	}
 
-	gps_control_on_trigger();
+	if (++fix_count < CONFIG_GPS_CONTROL_FIX_COUNT) {
+		return;
+	}
+
+	fix_count = 0;
 
 	gps_sample_fetch(dev);
 	gps_channel_get(dev, GPS_CHAN_NMEA, &gps_data);
@@ -319,6 +325,7 @@ static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
 		gps_cloud_data.tag = 0x1;
 	}
 
+	gps_control_stop(K_NO_WAIT);
 	k_work_submit(&send_gps_data_work);
 }
 
@@ -577,7 +584,7 @@ static void sensor_data_send(struct cloud_channel_data *data)
 	int err = 0;
 	struct cloud_data output;
 
-	if (!atomic_get(&send_data_enable)) {
+	if (!atomic_get(&send_data_enable) || gps_control_is_active()) {
 		return;
 	}
 
@@ -820,24 +827,18 @@ static void pairing_button_register(struct ui_evt *evt)
 }
 #endif
 
-static void accelerometer_calibrate(struct k_work *work)
+static void long_press_handler(struct k_work *work)
 {
-	int err;
-	enum ui_led_pattern temp_led_state = ui_led_get_pattern();
-
-	printk("Starting accelerometer calibration...\n");
-
-	ui_led_set_pattern(UI_ACCEL_CALIBRATING);
-
-	err = orientation_detector_calibrate();
-	if (err) {
-		printk("Accelerometer calibration failed: %d\n",
-			err);
+	if (gps_control_is_enabled()) {
+		ui_led_set_pattern(UI_CLOUD_CONNECTED);
+		printk("Stopping GPS\n");
+		gps_control_disable();
 	} else {
-		printk("Accelerometer calibration done.\n");
+		ui_led_set_color(100, 0, 100);
+		printk("Starting GPS\n");
+		gps_control_enable();
+		gps_control_start(K_SECONDS(1));
 	}
-
-	ui_led_set_pattern(temp_led_state);
 }
 
 /**@brief Initializes and submits delayed work. */
@@ -849,7 +850,7 @@ static void work_init(void)
 	k_work_init(&send_flip_data_work, send_flip_data_work_fn);
 	k_delayed_work_init(&send_env_data_work, send_env_data_work_fn);
 	k_delayed_work_init(&flip_poll_work, flip_send);
-	k_delayed_work_init(&long_press_button_work, accelerometer_calibrate);
+	k_delayed_work_init(&long_press_button_work, long_press_handler);
 	k_delayed_work_init(&cloud_reboot_work, cloud_reboot_handler);
 #if CONFIG_MODEM_INFO
 	k_work_init(&device_status_work, device_status_send);
@@ -1031,6 +1032,16 @@ static void ui_evt_handler(struct ui_evt evt)
 	   && atomic_get(&send_data_enable)) {
 		flip_send(NULL);
 	}
+
+	if (IS_ENABLED(CONFIG_GPS_CONTROL_ON_LONG_PRESS) &&
+	   (evt.button == UI_BUTTON_1)) {
+		if (evt.type == UI_EVT_BUTTON_ACTIVE) {
+			k_delayed_work_submit(&long_press_button_work,
+			K_SECONDS(5));
+		} else {
+			k_delayed_work_cancel(&long_press_button_work);
+		}
+	    }
 
 #if defined(CONFIG_LTE_LINK_CONTROL)
 	if ((evt.button == UI_SWITCH_2) &&
