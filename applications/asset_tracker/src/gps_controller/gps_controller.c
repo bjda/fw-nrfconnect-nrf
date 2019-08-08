@@ -50,6 +50,7 @@ static int start(void)
 
 	err = gps_start(gps_work.dev);
 	if (err) {
+		printk("Failed starting GPS!\n");
 		return err;
 	}
 
