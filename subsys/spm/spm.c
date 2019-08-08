@@ -391,8 +391,12 @@ static void spm_configure_ns(const tz_nonsecure_setup_conf_t
 	tz_nonsecure_exception_prio_config(1);
 	/* Set non-banked exceptions to target Non-Secure */
 	tz_nbanked_exception_target_state_set(0);
-	/* Don't allow Non-Secure firmware to issue System resets. */
-	tz_nonsecure_system_reset_req_block(1);
+	/* Configure if Non-Secure firmware should be allowed to issue System resets or
+	 * if it should be done through a secure service.
+	 */
+	tz_nonsecure_system_reset_req_block(
+		!IS_ENABLED(CONFIG_SPM_ALLOW_NON_SECURE_RESET)
+	);
 	/* Allow SPU to have precedence over (non-existing) ARMv8-M SAU. */
 	tz_sau_configure(0, 1);
 

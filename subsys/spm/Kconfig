@@ -71,6 +71,20 @@ config SPM_SERVICE_READ
 
 endif
 
+config SPM_ALLOW_NON_SECURE_RESET
+	bool "Allow Non-Secure reset"
+#FIXME: Change this to Default to `n` when the issue regarding doing a software
+#	reset from non-secure state with a secure debugger is resolved.
+	default n if BOARD_NRF9160_PCA10090
+	default y
+	help
+	  This will allow the application running in Non-Secure to do a
+	  system reset of the chip without going through a secure service.
+	  Since there are boards which do not have a pin-reset such as
+	  Thingy91 this option should be enabled by default. If not a debugger
+	  would not be able to issue a reset from a non-secure region even if it
+	  is configure to be secure.
+
 config SPM_BOOT_SILENTLY
 	bool "Boot silently"
 	default n
