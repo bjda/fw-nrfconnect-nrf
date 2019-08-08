@@ -1173,7 +1173,13 @@ connect:
 				goto connect;
 			}
 			error_handler(ERROR_CLOUD, -EIO);
-			break;
+			return;
+		}
+
+		if ((fds[0].revents & POLLHUP) == POLLHUP) {
+			printk("Socket error: POLLHUP\n");
+			error_handler(ERROR_CLOUD, -EIO);
+			return;
 		}
 
 		if ((fds[0].revents & POLLERR) == POLLERR) {
