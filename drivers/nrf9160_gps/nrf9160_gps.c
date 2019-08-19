@@ -115,8 +115,8 @@ static void print_satellite_stats(nrf_gnss_data_frame_t *pvt_data)
 						       in_fix,
 						       unhealthy);
 
-	LOG_DBG("Seconds since last fix %lld",
-			(k_uptime_get() - fix_timestamp) / 1000);
+	LOG_DBG("Seconds since last fix %u",
+			(u32_t)((k_uptime_get() - fix_timestamp) / 1000));
 }
 
 static void gps_thread(int dev_ptr)
