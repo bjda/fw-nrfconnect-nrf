@@ -18,6 +18,12 @@
 #include "nrf_inbuilt_key.h"
 #endif
 
+#if defined(CONFIG_AWS_FOTA)
+#include <net/aws_fota.h>
+#include <dfu/mcuboot.h>
+#include <misc/reboot.h>
+#endif
+
 LOG_MODULE_REGISTER(nrf_cloud_transport, CONFIG_NRF_CLOUD_LOG_LEVEL);
 
 #if defined(CONFIG_NRF_CLOUD_PROVISION_CERTIFICATES)
@@ -435,6 +441,23 @@ static int nct_provision(void)
 	return 0;
 }
 
+#if defined(CONFIG_AWS_FOTA)
+/* Handle AWS FOTA events */
+static void aws_fota_cb_handler(enum aws_fota_evt_id evt)
+{
+	switch (evt) {
+	case AWS_FOTA_EVT_DONE:
+		LOG_DBG("AWS_FOTA_EVT_DONE, rebooting to apply update.");
+		sys_reboot(0);
+		break;
+
+	case AWS_FOTA_EVT_ERROR:
+		LOG_ERR("AWS_FOTA_EVT_ERROR");
+		break;
+	}
+}
+#endif /* defined(CONFIG_AWS_FOTA) */
+
 /* Connect to MQTT broker. */
 int nct_mqtt_connect(void)
 {
@@ -460,7 +483,18 @@ int nct_mqtt_connect(void)
 #else
 	nct.client.transport.type = MQTT_TRANSPORT_NON_SECURE;
 #endif
-
+#if defined(CONFIG_AWS_FOTA)
+	int err = aws_fota_init(&nct.client, STRINGIFY(APP_VERSION),
+				aws_fota_cb_handler);
+	if (err != 0) {
+		LOG_ERR("ERROR: aws_fota_init %d", err);
+		return err;
+	}
+	/* Initializations were successful; mark image as working so that we
+	 * will not revert upon reboot.
+	 */
+	boot_write_img_confirmed();
+#endif /* defined(CONFIG_AWS_FOTA) */
 	return mqtt_connect(&nct.client);
 }
 
@@ -477,12 +511,28 @@ static int publish_get_payload(struct mqtt_client *client, size_t length)
 static void nct_mqtt_evt_handler(struct mqtt_client *const mqtt_client,
 				 const struct mqtt_evt *_mqtt_evt)
 {
+	int err;
 	struct nct_evt evt = {
 		.status = _mqtt_evt->result
 	};
 	struct nct_cc_data cc;
 	struct nct_dc_data dc;
 	bool event_notify = false;
+
+#if defined(CONFIG_AWS_FOTA)
+	err = aws_fota_mqtt_evt_handler(mqtt_client, _mqtt_evt);
+	if (err > 0) {
+		/* Event handled by FOTA library so we can skip it */
+		return;
+	} else if (err < 0) {
+		LOG_ERR("aws_fota_mqtt_evt_handler: Failed! %d", err);
+		LOG_DBG("Disconnecting MQTT client...");
+		err = mqtt_disconnect(mqtt_client);
+		if (err) {
+			LOG_ERR("Could not disconnect: %d", err);
+		}
+	}
+#endif /* defined(CONFIG_AWS_FOTA) */
 
 	switch (_mqtt_evt->type) {
 	case MQTT_EVT_CONNACK: {
@@ -589,7 +639,7 @@ static void nct_mqtt_evt_handler(struct mqtt_client *const mqtt_client,
 	}
 
 	if (event_notify) {
-		int err = nct_input(&evt);
+		err = nct_input(&evt);
 
 		if (err != 0) {
 			LOG_ERR("nct_input: failed %d", err);
