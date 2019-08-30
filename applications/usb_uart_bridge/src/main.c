@@ -224,16 +224,6 @@ void main(void)
 	k_sem_init(&uart_0_dev_data->sem, 0, 1);
 	k_sem_init(&uart_1_dev_data->sem, 0, 1);
 
-	/* For unknown reasons, we have to sleep ~200 ms here
-	 * for the USB to be recognized properly by Windows. We loose early
-	 * log information on power cycle because of this.
-	 * TODO: Investiate and fix this bug.
-	 */
-	k_sleep(200);
-
-	/* Wait 1 sec for the host to do all settings */
-	k_busy_wait(1000000);
-
 	uart_irq_callback_user_data_set(usb_0_dev, uart_interrupt_handler,
 		usb_0_dev_data);
 	uart_irq_callback_user_data_set(usb_1_dev, uart_interrupt_handler,
