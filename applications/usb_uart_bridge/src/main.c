@@ -10,6 +10,7 @@
 #include <nrfx.h>
 #include <string.h>
 #include <nrf_power.h>
+#include <power/reboot.h>
 
 /* Overriding weak function to set iSerial runtime. */
 u8_t *usb_update_sn_string_descriptor(void)
@@ -56,6 +57,38 @@ static struct serial_dev {
 	struct uart_data *rx;
 } devs[4];
 
+/* Frees data for incoming transmission on dev_data blocked by full heap. */
+int oom_free(struct serial_dev *dev_data)
+{
+	struct serial_dev *peer_dev_data = (struct serial_dev *)dev_data->peer;
+	struct uart_data *buf;
+
+	/* First, try to free from FIFO of peer device (blocked stream) */
+	buf = k_fifo_get(peer_dev_data->fifo, K_NO_WAIT);
+	if (buf) {
+		k_free(buf);
+		return 0;
+	}
+
+	/* Then, try FIFO of the receiving device (reverse of blocked stream) */
+	buf = k_fifo_get(dev_data->fifo, K_NO_WAIT);
+	if (buf) {
+		k_free(buf);
+		return 0;
+	}
+
+	/* Finally, try all of them */
+	for (int i = 0; i < sizeof(devs) / sizeof(struct serial_dev); i++) {
+		buf = k_fifo_get(dev_data->fifo, K_NO_WAIT);
+		if (buf) {
+			k_free(buf);
+			return 0;
+		}
+	}
+
+	return -1; /* Was not able to free any heap memory */
+}
+
 static void uart_interrupt_handler(void *user_data)
 {
 	struct serial_dev *dev_data = user_data;
@@ -68,24 +101,17 @@ static void uart_interrupt_handler(void *user_data)
 	while (uart_irq_rx_ready(dev)) {
 		int data_length;
 
-		if (!(*rx)) {
+		while (!(*rx)) {
 			(*rx) = k_malloc(sizeof(*(*rx)));
 			if ((*rx)) {
 				(*rx)->len = 0;
 			} else {
-				char dummy;
+				int err = oom_free(dev_data);
 
-				printk("Not able to allocate UART buffer, ");
-				printk("dropping oldest entry\n");
-
-				/* Drop the oldest entry. */
-				(void)k_fifo_get(dev_data->fifo, K_NO_WAIT);
-
-				/* Drop one byte to avoid spinning in an
-				 * eternal loop.
-				 */
-				uart_fifo_read(dev, &dummy, 1);
-				return;
+				if (err) {
+					printk("Could not free memory. Rebooting.\n");
+					sys_reboot(SYS_REBOOT_COLD);
+				}
 			}
 		}
 
