@@ -23,8 +23,8 @@ u8_t *usb_update_sn_string_descriptor(void)
 	return (u8_t *)&buf;
 }
 
-#define POWER_THREAD_STACKSIZE		1024
-#define POWER_THREAD_PRIORITY		7
+#define POWER_THREAD_STACKSIZE		48
+#define POWER_THREAD_PRIORITY		K_LOWEST_APPLICATION_THREAD_PRIO
 
 /* Heap block space is always one of 2^(2n) for n from 3 to 7.
  * (see reference/kernel/memory/heap.html for more info)
