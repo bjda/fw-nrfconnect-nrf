@@ -9,6 +9,7 @@
 #include <uart.h>
 #include <nrfx.h>
 #include <string.h>
+#include <nrf_power.h>
 
 /* Overriding weak function to set iSerial runtime. */
 u8_t *usb_update_sn_string_descriptor(void)
@@ -22,9 +23,10 @@ u8_t *usb_update_sn_string_descriptor(void)
 	return (u8_t *)&buf;
 }
 
-#define THREAD_STACKSIZE		1024
-#define UART_BUF_SIZE			58
-#define THREAD_PRIORITY			7
+#define POWER_THREAD_STACKSIZE		1024
+#define POWER_THREAD_PRIORITY		7
+
+#define UART_BUF_SIZE 58
 
 static K_FIFO_DEFINE(usb_0_tx_fifo);
 static K_FIFO_DEFINE(usb_1_tx_fifo);
@@ -79,7 +81,7 @@ static void uart_interrupt_handler(void *user_data)
 		}
 
 		data_length = uart_fifo_read(dev, &(*rx)->buffer[(*rx)->len],
-					     UART_BUF_SIZE - (*rx)->len);
+					   UART_BUF_SIZE - (*rx)->len);
 		(*rx)->len += data_length;
 
 		if ((*rx)->len > 0) {
@@ -128,10 +130,8 @@ static void uart_interrupt_handler(void *user_data)
 void power_thread(void)
 {
 	while (1) {
-		u32_t status = NRF_POWER->USBREGSTATUS;
-
-		if (0 == (status & POWER_USBREGSTATUS_VBUSDETECT_Msk)) {
-			NRF_POWER->SYSTEMOFF = 1;
+		if (!nrf_power_usbregstatus_vbusdet_get()) {
+			nrf_power_system_off();
 		}
 		k_sleep(100);
 	}
@@ -256,5 +256,5 @@ void main(void)
 	}
 }
 
-K_THREAD_DEFINE(power_thread_id, THREAD_STACKSIZE, power_thread,
-		NULL, NULL, NULL, THREAD_PRIORITY, 0, K_NO_WAIT);
+K_THREAD_DEFINE(power_thread_id, POWER_THREAD_STACKSIZE, power_thread,
+		NULL, NULL, NULL, POWER_THREAD_PRIORITY, 0, K_NO_WAIT);
