@@ -45,7 +45,7 @@ static K_FIFO_DEFINE(uart_1_tx_fifo);
 
 struct uart_data {
 	void *fifo_reserved;
-	u8_t buffer[UART_BUF_SIZE];
+	u8_t buf[UART_BUF_SIZE];
 	u16_t len;
 };
 
@@ -94,17 +94,16 @@ static void uart_interrupt_handler(void *user_data)
 	struct serial_dev *dev_data = user_data;
 	struct device *dev = dev_data->dev;
 	struct serial_dev *peer_dev_data = (struct serial_dev *)dev_data->peer;
-	struct uart_data **rx = &dev_data->rx;
 
 	uart_irq_update(dev);
 
 	while (uart_irq_rx_ready(dev)) {
 		int data_length;
 
-		while (!(*rx)) {
-			(*rx) = k_malloc(sizeof(*(*rx)));
-			if ((*rx)) {
-				(*rx)->len = 0;
+		while (!(dev_data->rx)) {
+			(dev_data->rx) = k_malloc(sizeof(*(dev_data->rx)));
+			if (dev_data->rx) {
+				dev_data->rx->len = 0;
 			} else {
 				int err = oom_free(dev_data);
 
@@ -114,20 +113,20 @@ static void uart_interrupt_handler(void *user_data)
 				}
 			}
 		}
+		data_length = uart_fifo_read(dev,
+					&(dev_data->rx->buf[dev_data->rx->len]),
+					UART_BUF_SIZE - dev_data->rx->len);
+		dev_data->rx->len += data_length;
 
-		data_length = uart_fifo_read(dev, &(*rx)->buffer[(*rx)->len],
-					   UART_BUF_SIZE - (*rx)->len);
-		(*rx)->len += data_length;
-
-		if ((*rx)->len > 0) {
-			if (((*rx)->len == UART_BUF_SIZE) ||
-			   ((*rx)->buffer[(*rx)->len - 1] == '\n') ||
-			   ((*rx)->buffer[(*rx)->len - 1] == '\r') ||
-			   ((*rx)->buffer[(*rx)->len - 1] == '\0')) {
-				k_fifo_put(peer_dev_data->fifo, (*rx));
+		if (dev_data->rx->len > 0) {
+			if ((dev_data->rx->len == UART_BUF_SIZE) ||
+			   (dev_data->rx->buf[dev_data->rx->len - 1] == '\n') ||
+			   (dev_data->rx->buf[dev_data->rx->len - 1] == '\r') ||
+			   (dev_data->rx->buf[dev_data->rx->len - 1] == '\0')) {
+				k_fifo_put(peer_dev_data->fifo, dev_data->rx);
 				k_sem_give(&peer_dev_data->sem);
 
-				(*rx) = NULL;
+				dev_data->rx = NULL;
 			}
 		}
 	}
@@ -144,7 +143,7 @@ static void uart_interrupt_handler(void *user_data)
 
 		while (buf->len > written) {
 			written += uart_fifo_fill(dev,
-						  &buf->buffer[written],
+						  &buf->buf[written],
 						  buf->len - written);
 		}
 
