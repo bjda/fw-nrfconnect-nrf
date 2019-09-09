@@ -78,7 +78,7 @@ int oom_free(struct serial_dev *dev_data)
 	}
 
 	/* Finally, try all of them */
-	for (int i = 0; i < sizeof(devs) / sizeof(struct serial_dev); i++) {
+	for (int i = 0; i < ARRAY_SIZE(devs); i++) {
 		buf = k_fifo_get(dev_data->fifo, K_NO_WAIT);
 		if (buf) {
 			k_free(buf);
