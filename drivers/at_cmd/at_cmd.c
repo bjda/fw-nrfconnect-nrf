@@ -51,6 +51,11 @@ struct callback_work_item {
 K_MEM_SLAB_DEFINE(rsp_work_items, sizeof(struct callback_work_item),
 		  CONFIG_AT_CMD_RESPONSE_BUFFER_COUNT, 4);
 
+enum cmd_mode {
+	CMD_MODE_CONTINUE,
+	CMD_MODE_BLOCK
+}
+
 static int open_socket(void)
 {
 	common_socket_fd = socket(AF_LTE, 0, NPROTO_AT);
@@ -223,7 +228,7 @@ next:
 	}
 }
 
-static inline int at_write(const char *const cmd, enum at_cmd_state *state)
+static inline int at_write(const char *const cmd, enum at_cmd_state *state, int blocking)
 {
 	int bytes_sent;
 	int bytes_to_send = strlen(cmd);
@@ -238,7 +243,10 @@ static inline int at_write(const char *const cmd, enum at_cmd_state *state)
 		ret.code  = -errno;
 		ret.state = AT_CMD_ERROR;
 	} else {
-		k_msgq_get(&return_code_msq, &ret, K_FOREVER);
+		if(blocking){
+			k_msgq_get(&return_code_msq, &ret, K_FOREVER);
+		}
+
 		LOG_DBG("Bytes sent: %d", bytes_sent);
 
 		if (bytes_sent != bytes_to_send) {
@@ -263,7 +271,7 @@ int at_cmd_write_with_callback(const char *const cmd,
 
 	current_cmd_handler = handler;
 
-	int return_code = at_write(cmd, state);
+	int return_code = at_write(cmd, state, 1);
 
 	k_sem_give(&cmd_pending);
 
@@ -280,11 +288,34 @@ int at_cmd_write(const char *const cmd,
 	response_buf     = buf;
 	response_buf_len = buf_len;
 
-	int return_code = at_write(cmd, state);
+	int return_code = at_write(cmd, state, 1);
 
 	k_sem_give(&cmd_pending);
 
 	return return_code;
+}
+
+int at_cmd_write_multipart(const char *const cmd_part,
+			   int last_part,
+			   int *key,
+			   enum at_cmd_state *state)
+{
+	static int key_local = 0x93102429; /* Arbitrary initial key */
+	
+	/* Ensure caller has exclusive access */
+	if (key != key_local || k_sem_take(&cmd_pending, K_FOREVER) != 0){
+		return -EBUSY;
+	}
+
+	*key = key_local; /* Store key to recognize caller next time */
+
+	if (last_part == 0){
+		at_write(cmd_part, state, 0)
+	} else {
+		at_write(cmd_part, state, 1)
+		key ++;
+	}
+
 }
 
 void at_cmd_set_notification_handler(at_cmd_handler_t handler)
