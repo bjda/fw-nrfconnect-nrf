@@ -15,6 +15,10 @@
 
 LOG_MODULE_REGISTER(at_host, CONFIG_AT_HOST_LOG_LEVEL);
 
+/* Stack definition for AT host workqueue */
+#define AT_HOST_STACK_SIZE 512
+K_THREAD_STACK_DEFINE(at_host_stack_area, AT_HOST_STACK_SIZE);
+
 #define CONFIG_UART_0_NAME      "UART_0"
 #define CONFIG_UART_1_NAME      "UART_1"
 #define CONFIG_UART_2_NAME      "UART_2"
@@ -24,7 +28,11 @@ LOG_MODULE_REGISTER(at_host, CONFIG_AT_HOST_LOG_LEVEL);
 #define OK_STR    "OK\r\n"
 #define ERROR_STR "ERROR\r\n"
 
-#define AT_MAX_CMD_LEN		CONFIG_AT_CMD_RESPONSE_MAX_LEN
+#if CONFIG_AT_HOST_CMD_MAX_LEN > CONFIG_AT_CMD_RESPONSE_MAX_LEN
+#define AT_BUF_SIZE CONFIG_AT_HOST_CMD_MAX_LEN
+#else
+#define AT_BUF_SIZE CONFIG_AT_CMD_RESPONSE_MAX_LEN
+#endif
 
 /** @brief Termination Modes. */
 enum term_modes {
@@ -45,10 +53,9 @@ enum select_uart {
 
 static enum term_modes term_mode;
 static struct device *uart_dev;
-static u8_t at_buf[AT_MAX_CMD_LEN];
-static size_t at_buf_len;
+static char at_buf[AT_BUF_SIZE]; /* AT command and modem response buffer */
+static struct k_work_q at_host_work_q;
 static struct k_work cmd_send_work;
-static const char termination[3] = { '\0', '\r', '\n' };
 
 
 
@@ -61,9 +68,10 @@ static inline void write_uart_string(char *str, size_t len)
 
 static void response_handler(char *response)
 {
-	int len = strlen(response) + 1;
+	int len = strlen(response);
+
 	/* Forward the data over UART */
-	if (len > 1) {
+	if (len > 0) {
 		write_uart_string(response, len);
 	}
 }
@@ -72,28 +80,29 @@ static void cmd_send(struct k_work *work)
 {
 	size_t            chars;
 	char              str[15];
-	static char       buf[AT_MAX_CMD_LEN];
 	enum at_cmd_state state;
 	int               err;
 
 	ARG_UNUSED(work);
 
 	/* Make sure the string is 0-terminated */
-	at_buf[MIN(at_buf_len, AT_MAX_CMD_LEN - 1)] = 0;
+	at_buf[AT_BUF_SIZE - 1] = 0;
 
-	err = at_cmd_write(at_buf, buf, AT_MAX_CMD_LEN, &state);
+	err = at_cmd_write(at_buf, at_buf,
+			   CONFIG_AT_CMD_RESPONSE_MAX_LEN, &state);
 	if (err < 0) {
-		LOG_ERR("Could not send AT command to modem: %d", err);
+		LOG_ERR("Error while processing AT command: %d", err);
 		state = AT_CMD_ERROR;
 	}
 
+	/* Handle the various error responses from modem */
 	switch (state) {
 	case AT_CMD_OK:
-		write_uart_string(buf, strlen(buf));
-		write_uart_string(OK_STR, sizeof(OK_STR));
+		write_uart_string(at_buf, strlen(at_buf));
+		write_uart_string(OK_STR, sizeof(OK_STR) - 1);
 		break;
 	case AT_CMD_ERROR:
-		write_uart_string(ERROR_STR, sizeof(ERROR_STR));
+		write_uart_string(ERROR_STR, sizeof(ERROR_STR) - 1);
 		break;
 	case AT_CMD_ERROR_CMS:
 		chars = sprintf(str, "+CMS: %d\r\n", err);
@@ -113,75 +122,75 @@ static void cmd_send(struct k_work *work)
 static void uart_rx_handler(u8_t character)
 {
 	static bool inside_quotes;
-	static size_t cmd_len;
-	size_t pos;
+	static size_t at_cmd_len;
 
-	cmd_len += 1;
-	pos = cmd_len - 1;
-
-	/* Handle special characters. */
+	/* Handle control characters */
 	switch (character) {
 	case 0x08: /* Backspace. */
 		/* Fall through. */
 	case 0x7F: /* DEL character */
-		pos = pos ? pos - 1 : 0;
-		at_buf[pos] = 0;
-		cmd_len = cmd_len <= 1 ? 0 : cmd_len - 2;
-		break;
-	case '"':
-		inside_quotes = !inside_quotes;
-		 /* Fall through. */
-	default:
-		/* Detect AT command buffer overflow or zero length */
-		if (cmd_len > AT_MAX_CMD_LEN) {
-			LOG_ERR("Buffer overflow, dropping '%c'\n", character);
-			cmd_len = AT_MAX_CMD_LEN;
-			return;
-		} else if (cmd_len < 1) {
-			LOG_ERR("Invalid AT command length: %d", cmd_len);
-			cmd_len = 0;
-			return;
+		if (at_cmd_len > 0) {
+			at_cmd_len--;
 		}
-
-		at_buf[pos] = character;
-		break;
-	}
-
-	if (inside_quotes) {
 		return;
 	}
 
-	/* Check if the character marks line termination. */
-	switch (term_mode) {
-	case MODE_NULL_TERM:
-		/* Fall through. */
-	case MODE_CR:
-		if (character == termination[term_mode]) {
-			goto send;
+	/* Handle termination sequence, if outside quotes */
+	if (!inside_quotes) {
+		switch (term_mode) {
+		case MODE_NULL_TERM:
+			if (character == '\0') {
+				goto send;
+			}
+			break;
+		case MODE_CR:
+			if (character == '\r') {
+				goto send;
+			}
+			break;
+		case MODE_LF:
+			if (character == '\n') {
+				goto send;
+			}
+			break;
+		case MODE_CR_LF:
+			if ((at_buf[at_cmd_len - 1] == '\r') &&
+			    (character == '\n')) {
+				at_cmd_len--; /* Remove preceding CR */
+				goto send;
+			}
+			break;
+		default:
+			LOG_ERR("Invalid termination mode: %d", term_mode);
+			break;
 		}
-		break;
-	case MODE_LF:
-		if ((at_buf[pos - 1]) &&
-			character == termination[term_mode]) {
-			goto send;
-		}
-		break;
-	case MODE_CR_LF:
-		if ((at_buf[pos - 1] == '\r') && (character == '\n')) {
-			goto send;
-		}
-		break;
-	default:
-		LOG_ERR("Invalid termination mode: %d", term_mode);
-		break;
+	}
+
+	/* Detect AT command buffer overflow, leaving space for null */
+	if (at_cmd_len + 1 > CONFIG_AT_HOST_CMD_MAX_LEN - 1) {
+		LOG_ERR("Buffer overflow, dropping '%c'\n", character);
+		return;
+	}
+
+	/* Write character to AT buffer */
+	at_buf[at_cmd_len] = character;
+	at_cmd_len++;
+
+	/* Handle special written character */
+	if (character == '"') {
+		inside_quotes = !inside_quotes;
 	}
 
 	return;
 send:
-	uart_irq_rx_disable(uart_dev);
-	k_work_submit(&cmd_send_work);
-	at_buf_len = cmd_len;
-	cmd_len = 0;
+	uart_irq_rx_disable(uart_dev); /* Block the UART to protect buffer */
+	at_buf[at_cmd_len] = '\0'; /* Terminate the command string */
+
+	/* Reset UART handler state */
+	inside_quotes = false;
+	at_cmd_len = 0;
+
+	k_work_submit_to_queue(&at_host_work_q, &cmd_send_work);
 }
 
 static void isr(struct device *dev)
@@ -277,6 +286,9 @@ static int at_host_init(struct device *arg)
 	}
 
 	k_work_init(&cmd_send_work, cmd_send);
+	k_work_q_start(&at_host_work_q, at_host_stack_area,
+		       K_THREAD_STACK_SIZEOF(at_host_stack_area),
+		       CONFIG_AT_HOST_THREAD_PRIO);
 	uart_irq_rx_enable(uart_dev);
 
 	return err;
