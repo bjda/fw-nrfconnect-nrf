@@ -85,9 +85,6 @@ static void cmd_send(struct k_work *work)
 
 	ARG_UNUSED(work);
 
-	/* Make sure the string is 0-terminated */
-	at_buf[AT_BUF_SIZE - 1] = 0;
-
 	err = at_cmd_write(at_buf, at_buf,
 			   CONFIG_AT_CMD_RESPONSE_MAX_LEN, &state);
 	if (err < 0) {
