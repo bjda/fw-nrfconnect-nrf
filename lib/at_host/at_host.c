@@ -82,7 +82,7 @@ static void cmd_send(struct k_work *work)
 	ARG_UNUSED(work);
 
 	err = at_cmd_write(at_buf, at_buf,
-			   CONFIG_AT_CMD_RESPONSE_MAX_LEN, &state);
+			   sizeof(at_buf), &state);
 	if (err < 0) {
 		LOG_ERR("Error while processing AT command: %d", err);
 		state = AT_CMD_ERROR;
@@ -161,7 +161,7 @@ static void uart_rx_handler(u8_t character)
 	}
 
 	/* Detect AT command buffer overflow, leaving space for null */
-	if (at_cmd_len + 1 > CONFIG_AT_HOST_CMD_MAX_LEN - 1) {
+	if (at_cmd_len + 1 > sizeof(at_buf) - 1) {
 		LOG_ERR("Buffer overflow, dropping '%c'\n", character);
 		return;
 	}
