@@ -59,26 +59,22 @@ static struct k_work cmd_send_work;
 
 
 
-static inline void write_uart_string(char *str, size_t len)
+static inline void write_uart_string(char *str)
 {
-	for (size_t i = 0; i < len; i++) {
+	/* Send characters until, but not including, null */
+	for (size_t i = 0; str[i]; i++) {
 		uart_poll_out(uart_dev, str[i]);
 	}
 }
 
 static void response_handler(char *response)
 {
-	int len = strlen(response);
-
 	/* Forward the data over UART */
-	if (len > 0) {
-		write_uart_string(response, len);
-	}
+	write_uart_string(response);
 }
 
 static void cmd_send(struct k_work *work)
 {
-	size_t            chars;
 	char              str[15];
 	enum at_cmd_state state;
 	int               err;
@@ -95,19 +91,19 @@ static void cmd_send(struct k_work *work)
 	/* Handle the various error responses from modem */
 	switch (state) {
 	case AT_CMD_OK:
-		write_uart_string(at_buf, strlen(at_buf));
-		write_uart_string(OK_STR, sizeof(OK_STR) - 1);
+		write_uart_string(at_buf);
+		write_uart_string(OK_STR);
 		break;
 	case AT_CMD_ERROR:
-		write_uart_string(ERROR_STR, sizeof(ERROR_STR) - 1);
+		write_uart_string(ERROR_STR);
 		break;
 	case AT_CMD_ERROR_CMS:
-		chars = sprintf(str, "+CMS: %d\r\n", err);
-		write_uart_string(str, ++chars);
+		sprintf(str, "+CMS: %d\r\n", err);
+		write_uart_string(str);
 		break;
 	case AT_CMD_ERROR_CME:
-		chars = sprintf(str, "+CME: %d\r\n", err);
-		write_uart_string(str, ++chars);
+		sprintf(str, "+CME: %d\r\n", err);
+		write_uart_string(str);
 		break;
 	default:
 		break;
