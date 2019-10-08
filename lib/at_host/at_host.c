@@ -196,8 +196,13 @@ static void isr(struct device *dev)
 		return;
 	}
 
-	while (uart_fifo_read(dev, &character, 1)) {
-		uart_rx_handler(character);
+	/* 
+	 * Check that we are not sending data (buffer must be preserved then),
+	 * and that a new character is available before handling each character
+	 */
+	while ((!k_work_pending(&cmd_send_work)) && 
+	       (uart_fifo_read(dev, &character, 1))) {
+			uart_rx_handler(character);
 	}
 }
 
