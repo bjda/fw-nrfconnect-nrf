@@ -177,10 +177,10 @@ static void uart_rx_handler(u8_t character)
 
 	return;
 send:
-	uart_irq_rx_disable(uart_dev); /* Block the UART to protect buffer */
 	at_buf[at_cmd_len] = '\0'; /* Terminate the command string */
 
 	/* Reset UART handler state */
+	cr_state = false;
 	inside_quotes = false;
 	at_cmd_len = 0;
 
