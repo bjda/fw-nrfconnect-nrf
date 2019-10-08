@@ -184,7 +184,11 @@ send:
 	inside_quotes = false;
 	at_cmd_len = 0;
 
-	k_work_submit_to_queue(&at_host_work_q, &cmd_send_work);
+	/* Send the command, if there is one to send */
+	if (at_buf[0]) {
+		uart_irq_rx_disable(uart_dev); /* Stop UART to protect at_buf */
+		k_work_submit_to_queue(&at_host_work_q, &cmd_send_work);
+	}
 }
 
 static void isr(struct device *dev)
@@ -204,6 +208,7 @@ static void isr(struct device *dev)
 	while ((!k_work_pending(&cmd_send_work)) && 
 	       (uart_fifo_read(dev, &character, 1))) {
 			uart_rx_handler(character);
+			printk("chr;");
 	}
 }
 
