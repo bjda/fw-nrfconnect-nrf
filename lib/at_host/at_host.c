@@ -114,6 +114,7 @@ static void cmd_send(struct k_work *work)
 
 static void uart_rx_handler(u8_t character)
 {
+	static bool cr_state; /* Whether last character received was a <CR> */
 	static bool inside_quotes;
 	static size_t at_cmd_len;
 
@@ -128,35 +129,35 @@ static void uart_rx_handler(u8_t character)
 		return;
 	}
 
-	/* Handle termination sequence, if outside quotes */
+	/* 
+	 * Handle termination characters, if outside quotes.
+	 * The characters are never written to buffer unless inside quotes.
+	 */
 	if (!inside_quotes) {
-		switch (term_mode) {
-		case MODE_NULL_TERM:
-			if (character == '\0') {
+		switch (character) {
+		case '\0':
+			if (term_mode == MODE_NULL_TERM) {
 				goto send;
 			}
-			break;
-		case MODE_CR:
-			if (character == '\r') {
+			return;
+		case '\r':
+			if (term_mode == MODE_CR) {
 				goto send;
 			}
-			break;
-		case MODE_LF:
-			if (character == '\n') {
+			if (term_mode == MODE_CR_LF) {
+				cr_state = true;
+			}
+			return;
+		case '\n':
+			if (term_mode == MODE_LF) {
 				goto send;
 			}
-			break;
-		case MODE_CR_LF:
-			if ((at_buf[at_cmd_len - 1] == '\r') &&
-			    (character == '\n')) {
-				at_cmd_len--; /* Remove preceding CR */
+			if (term_mode == MODE_CR_LF && cr_state) {
 				goto send;
 			}
-			break;
-		default:
-			LOG_ERR("Invalid termination mode: %d", term_mode);
-			break;
+			return;
 		}
+		cr_state = false;
 	}
 
 	/* Detect AT command buffer overflow, leaving space for null */
