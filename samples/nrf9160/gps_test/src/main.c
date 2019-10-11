@@ -14,12 +14,14 @@
 
 #ifdef CONFIG_BOARD_NRF9160_PCA10090NS
 #define AT_MAGPIO      "AT\%XMAGPIO=1,0,0,1,1,1574,1577"
+#define AT_COEX0      "AT\%XCOEX0=1,1,1570,1580"
 #endif
 
 static const char     at_commands[][31]  = {
 				AT_XSYSTEMMODE,
 #ifdef CONFIG_BOARD_NRF9160_PCA10090NS
 				AT_MAGPIO,
+				AT_COEX0,
 #endif
 				AT_CFUN
 			};
@@ -36,12 +38,12 @@ nrf_gnss_data_frame_t last_pvt;
 
 void bsd_recoverable_error_handler(uint32_t error)
 {
-	printf("Err: %lu\n", error);
+	printf("Err: %d\n", error);
 }
 
 void bsd_irrecoverable_error_handler(uint32_t error)
 {
-	printf("Irrecoverable: %lu\n", error);
+	printf("Irrecoverable: %d\n", error);
 }
 
 static int enable_gps(void)
@@ -84,11 +86,13 @@ static int init_app(void)
 {
 	u16_t fix_retry     = 0;
 	u16_t fix_interval  = 1;
-	u16_t nmea_mask     = NRF_CONFIG_NMEA_GSV_MASK |
-			      NRF_CONFIG_NMEA_GSA_MASK |
-			      NRF_CONFIG_NMEA_GLL_MASK |
-			      NRF_CONFIG_NMEA_GGA_MASK |
-			      NRF_CONFIG_NMEA_RMC_MASK;
+	u16_t nmea_mask     = NRF_GNSS_NMEA_GSV_MASK |
+			      NRF_GNSS_NMEA_GSA_MASK |
+			      NRF_GNSS_NMEA_GLL_MASK |
+			      NRF_GNSS_NMEA_GGA_MASK |
+			      NRF_GNSS_NMEA_RMC_MASK;
+	nrf_gnss_elevation_mask_t elevation_mask = 0;
+	nrf_gnss_delete_mask_t  delete_mask  = 0;
 	int   retval;
 
 	if (enable_gps() != 0) {
@@ -140,12 +144,23 @@ static int init_app(void)
 
 	retval = nrf_setsockopt(fd,
 				NRF_SOL_GNSS,
-				NRF_SO_GNSS_START,
-				NULL,
-				0);
+				NRF_SO_GNSS_ELEVATION_MASK,
+				&elevation_mask,
+				sizeof(elevation_mask));
 
 	if (retval != 0) {
-		printk("Failed to start GPS\n");
+		printk("Failed to set elevation mask: %d\n",retval);
+		return -1;
+	}
+
+	retval = nrf_setsockopt(fd,
+				NRF_SOL_GNSS,
+				NRF_SO_GNSS_START,
+				&delete_mask,
+				sizeof(delete_mask));
+
+	if (retval != 0) {
+		printk("Failed to start GPS: %d\n",retval);
 		return -1;
 	}
 
@@ -222,6 +237,7 @@ static void print_pvt_data(nrf_gnss_data_frame_t *pvt_data)
 	printf("longitude: %f,", pvt_data->pvt.longitude);
 	printf("latitude: %f,", pvt_data->pvt.latitude);
 	printf("altitude: %f,", pvt_data->pvt.altitude);
+	printf("accuracy: %f,", pvt_data->pvt.accuracy);
 	printf("speed: %f,", pvt_data->pvt.speed);
 	printf("heading: %f,", pvt_data->pvt.heading);
 	printf("date: %02u-%02u-%02u,", pvt_data->pvt.datetime.day,
@@ -234,7 +250,7 @@ static void print_pvt_data(nrf_gnss_data_frame_t *pvt_data)
 	printf("hdop: %f,", pvt_data->pvt.hdop);
 	printf("vdop: %f,", pvt_data->pvt.vdop);
 	printf("tdop: %f,", pvt_data->pvt.tdop);
-	printf("flags: %d,", pvt_data->pvt.flags);
+	printf("flags: %d,\n", pvt_data->pvt.flags);
 
 	for (size_t i = 0; i < NRF_GNSS_MAX_SATELLITES; i++) {
 		printf("sv: %d,", pvt_data->pvt.sv[i].sv);
@@ -242,7 +258,7 @@ static void print_pvt_data(nrf_gnss_data_frame_t *pvt_data)
 		printf("elevation: %d,", pvt_data->pvt.sv[i].elevation);
 		printf("azimuth: %d,", pvt_data->pvt.sv[i].azimuth);
 		printf("flags: %d,", pvt_data->pvt.sv[i].flags);
-		printf("signal: %d", pvt_data->pvt.sv[i].signal);
+		printf("signal: %d\n", pvt_data->pvt.sv[i].signal);
 	}
 	printf("\n");
 }
@@ -319,7 +335,8 @@ int main(void)
 
 		if (new_pvt_data) {
 			new_pvt_data = false;
-			print_pvt_csv(&gps_data);
+			//print_pvt_csv(&gps_data);
+			print_pvt_data(&gps_data);
 		}
 
 		if (got_first_fix && !printed_fix_time) {
