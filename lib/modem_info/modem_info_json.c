@@ -15,6 +15,9 @@
 
 LOG_MODULE_REGISTER(modem_info_json);
 
+/* Identifying strings for services */
+#define SERVICE_DFU "dfu"
+
 static int json_add_obj(cJSON *parent, const char *str, cJSON *item)
 {
 	cJSON_AddItemToObject(parent, str, item);
@@ -177,6 +180,25 @@ static int device_data_add(struct device_param *device, cJSON *json_obj)
 	return total_len;
 }
 
+static int services_data_add(cJSON *json_array)
+{
+	if (json_array == NULL) {
+		return -EINVAL;
+	}
+
+	if (IS_ENABLED(CONFIG_AWS_FOTA)) {
+		cJSON *dfu_str = cJSON_CreateStringReference(SERVICE_DFU);
+
+		if (dfu_str == NULL) {
+			return -ENOMEM;
+		}
+
+		cJSON_AddItemToArray(json_array, dfu_str);
+	}
+
+	return 0;
+}
+
 int modem_info_json_object_encode(struct modem_param_info *modem,
 				  cJSON *root_obj)
 {
@@ -189,6 +211,7 @@ int modem_info_json_object_encode(struct modem_param_info *modem,
 	cJSON *network_obj	= cJSON_CreateObject();
 	cJSON *sim_obj		= cJSON_CreateObject();
 	cJSON *device_obj	= cJSON_CreateObject();
+	cJSON *services_array	= cJSON_CreateArray();
 
 	if (network_obj == NULL || sim_obj == NULL || device_obj == NULL) {
 		obj_count = -ENOMEM;
@@ -216,10 +239,18 @@ int modem_info_json_object_encode(struct modem_param_info *modem,
 		device_obj = NULL;
 	}
 
+	if (IS_ENABLED(CONFIG_MODEM_INFO_ADD_SERVICES) &&
+	    (services_data_add(services_array) >= 0)) {
+
+		json_add_obj(root_obj, "serviceInfo", services_array);
+		services_array = NULL;
+	}
+
 delete_object:
 	cJSON_Delete(network_obj);
 	cJSON_Delete(sim_obj);
 	cJSON_Delete(device_obj);
+	cJSON_Delete(services_array);
 
 	if (obj_count >= 0) {
 		obj_count = cJSON_GetArraySize(root_obj) - obj_count;

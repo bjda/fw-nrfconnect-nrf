@@ -68,4 +68,11 @@ config MODEM_INFO_ADD_BOARD
 	  Add the name of the board to the returned
 	  device JSON object.
 
+config MODEM_INFO_ADD_SERVICES
+	bool "Add services to JSON string"
+	default y
+	help
+	  Add the supported services to the returned
+	  device JSON object.
+
 endif # MODEM_INFO
