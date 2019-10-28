@@ -59,7 +59,7 @@ int service_info_json_object_encode(
 	    ((fota == NULL) && fota_count)) {
 		return -EINVAL;
 	}
-
+/*
 	service_info_obj = cJSON_CreateObject();
 	if (service_info_obj == NULL) {
 		return -ENOMEM;
@@ -76,6 +76,10 @@ int service_info_json_object_encode(
 		err = add_array_obj(fota, fota_count, fota_name,
 				    service_info_obj);
 	}
+*/
+	service_info_obj = cJSON_CreateArray();
+	cJSON_AddItemToArray(service_info_obj, cJSON_CreateStringReference("dfu"));
+
 
 	if (!err) {
 		cJSON_AddItemToObject(obj_out, SERVICE_INFO_JSON_NAME,
