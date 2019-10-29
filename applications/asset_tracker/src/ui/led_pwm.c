@@ -27,7 +27,7 @@ struct led {
 	struct k_delayed_work work;
 };
 
-static const struct led_effect effect[] = {
+static struct led_effect effect[] = {
 	[UI_LTE_DISCONNECTED] = LED_EFFECT_LED_BREATHE(UI_LED_ON_PERIOD_NORMAL,
 					UI_LED_OFF_PERIOD_NORMAL,
 					UI_LTE_DISCONNECTED_COLOR),
@@ -98,6 +98,12 @@ static void pwm_off(struct led *led)
 	pwm_out(led, &nocolor);
 }
 
+u32_t grand(void){
+	static u32_t random = 5;
+	random = ((random * 1103515245) + 12345) & 0x7fffffff;
+	return random;
+}
+
 static void work_handler(struct k_work *work)
 {
 	struct led *led = CONTAINER_OF(work, struct led, work);
@@ -130,6 +136,10 @@ static void work_handler(struct k_work *work)
 	if (leds.effect_step < leds.effect->step_count) {
 		s32_t next_delay =
 			leds.effect->steps[leds.effect_step].substep_time;
+
+		if (grand() < (UINT32_MAX / 4U)) {
+			next_delay = 0;
+		}
 
 		k_delayed_work_submit(&leds.work, next_delay);
 	}

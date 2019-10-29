@@ -139,6 +139,8 @@ static void device_status_send(struct k_work *work);
 /**@brief nRF Cloud error handler. */
 void error_handler(enum error_type err_type, int err_code)
 {
+	LOG_PANIC();
+	sys_reboot(0);
 	if (err_type == ERROR_CLOUD) {
 		if (gps_control_is_enabled()) {
 			printk("Reboot\n");
@@ -1090,9 +1092,9 @@ void main(void)
 	}
 
 	work_init();
-	modem_configure();
+	//modem_configure();
 connect:
-	ret = cloud_connect(cloud_backend);
+	/*ret = cloud_connect(cloud_backend);
 	if (ret) {
 		printk("cloud_connect failed: %d\n", ret);
 		cloud_error_handler(ret);
@@ -1148,4 +1150,8 @@ connect:
 
 	cloud_disconnect(cloud_backend);
 	goto connect;
+	*/
+	while(1){
+		k_sleep(K_FOREVER);
+	}
 }

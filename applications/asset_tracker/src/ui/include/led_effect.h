@@ -39,7 +39,7 @@ struct led_effect {
 		.c = {_r, _g, _b}	\
 }
 #define LED_NOCOLOR() {			\
-		.c = {0, 0, 0}		\
+		.c = {20, 0, 0}		\
 }
 
 #define LED_EFFECT_LED_ON(_color)					       \
