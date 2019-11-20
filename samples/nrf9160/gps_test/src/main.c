@@ -9,8 +9,10 @@
 #include <net/socket.h>
 #include <stdio.h>
 
-#define AT_XSYSTEMMODE "AT\%XSYSTEMMODE=0,0,1,0"
-#define AT_CFUN        "AT+CFUN=1"
+#define AT_XSYSTEMMODE	"AT\%XSYSTEMMODE=0,0,1,0"
+#define AT_CFUN		"AT+CFUN=1"
+
+#define AT_IMEI		"AT+CGSN"
 
 #ifdef CONFIG_BOARD_NRF9160_PCA10090NS
 #define AT_MAGPIO      "AT\%XMAGPIO=1,0,0,1,1,1574,1577"
@@ -35,6 +37,8 @@ static bool           got_first_fix;
 static bool 	      new_pvt_data;
 static u64_t          fix_timestamp;
 nrf_gnss_data_frame_t last_pvt;
+
+static char imei[15];
 
 void bsd_recoverable_error_handler(uint32_t error)
 {
@@ -82,6 +86,33 @@ static int enable_gps(void)
 	return 0;
 }
 
+static int get_imei(char *buf)
+{
+	int  at_sock;
+	int  bytes_sent;
+	int  bytes_received;
+
+	at_sock = socket(AF_LTE, 0, NPROTO_AT);
+	if (at_sock < 0) {
+		return -1;
+	}
+
+	bytes_sent = send(at_sock, AT_IMEI,
+				strlen(AT_IMEI), 0);
+
+	if (bytes_sent < 0) {
+		close(at_sock);
+		return -1;
+	}
+
+	do {
+		bytes_received = recv(at_sock, buf, 15, 0);
+	} while (bytes_received == 0);
+	printk("%d:%s\n", bytes_received, buf);
+	close(at_sock);
+	return 0;
+}
+
 static int init_app(void)
 {
 	u16_t fix_retry     = 0;
@@ -94,6 +125,10 @@ static int init_app(void)
 	nrf_gnss_elevation_mask_t elevation_mask = 0;
 	nrf_gnss_delete_mask_t  delete_mask  = 0;
 	int   retval;
+
+	if (get_imei(imei) != 0) {
+		printk("get imei fail\n");
+	}
 
 	if (enable_gps() != 0) {
 		printk("Failed to enable GPS\n");
@@ -202,18 +237,21 @@ static void print_satellite_stats(nrf_gnss_data_frame_t *pvt_data)
 
 static void print_pvt_csv(nrf_gnss_data_frame_t *pvt_data)
 {
+	printf("%s,", imei);
 	printf("%d,", k_uptime_get_32());
 	printf("%f,", pvt_data->pvt.longitude);
 	printf("%f,", pvt_data->pvt.latitude);
 	printf("%f,", pvt_data->pvt.altitude);
+	printf("%f,", pvt_data->pvt.accuracy);
 	printf("%f,", pvt_data->pvt.speed);
 	printf("%f,", pvt_data->pvt.heading);
 	printf("%02u-%02u-%02u,", pvt_data->pvt.datetime.day,
 					       pvt_data->pvt.datetime.month,
 					       pvt_data->pvt.datetime.year);
-	printf("%02u:%02u:%02u,", pvt_data->pvt.datetime.hour,
+	printf("%02u:%02u:%02u.%03u,", pvt_data->pvt.datetime.hour,
 					       pvt_data->pvt.datetime.minute,
-					      pvt_data->pvt.datetime.seconds);
+					      pvt_data->pvt.datetime.seconds,
+					      pvt_data->pvt.datetime.ms);
 	printf("%f,", pvt_data->pvt.pdop);
 	printf("%f,", pvt_data->pvt.hdop);
 	printf("%f,", pvt_data->pvt.vdop);
@@ -327,7 +365,7 @@ int main(void)
 	gps_started = k_uptime_get_32();
 
 	printk("Getting GPS data...\n");
-	printk("timestamp,longitude,latitude,altitude,speed,heading,date,time,pdop,hdop,vdop,tdop,flags,sv0_sv,sv0_cn0,sv0_elevation,sv0_azimuth,sv0_flags,sv0_signal,sv1_sv,sv1_cn0,sv1_elevation,sv1_azimuth,sv1_flags,sv1_signal,sv2_sv,sv2_cn0,sv2_elevation,sv2_azimuth,sv2_flags,sv2_signal,sv3_sv,sv3_cn0,sv3_elevation,sv3_azimuth,sv3_flags,sv3_signal,sv4_sv,sv4_cn0,sv4_elevation,sv4_azimuth,sv4_flags,sv4_signal,sv5_sv,sv5_cn0,sv5_elevation,sv5_azimuth,sv5_flags,sv5_signal,sv6_sv,sv6_cn0,sv6_elevation,sv6_azimuth,sv6_flags,sv6_signal,sv7_sv,sv7_cn0,sv7_elevation,sv7_azimuth,sv7_flags,sv7_signal,sv8_sv,sv8_cn0,sv8_elevation,sv8_azimuth,sv8_flags,sv8_signal,sv9_sv,sv9_cn0,sv9_elevation,sv9_azimuth,sv9_flags,sv9_signal,sv10_sv,sv10_cn0,sv10_elevation,sv10_azimuth,sv10_flags,sv10_signal,sv11_sv,sv11_cn0,sv11_elevation,sv11_azimuth,sv11_flags,sv11_signal\n");
+	printk("imei,timestamp,longitude,latitude,altitude,accuracy,speed,heading,date,time,pdop,hdop,vdop,tdop,flags,sv0_sv,sv0_cn0,sv0_elevation,sv0_azimuth,sv0_flags,sv0_signal,sv1_sv,sv1_cn0,sv1_elevation,sv1_azimuth,sv1_flags,sv1_signal,sv2_sv,sv2_cn0,sv2_elevation,sv2_azimuth,sv2_flags,sv2_signal,sv3_sv,sv3_cn0,sv3_elevation,sv3_azimuth,sv3_flags,sv3_signal,sv4_sv,sv4_cn0,sv4_elevation,sv4_azimuth,sv4_flags,sv4_signal,sv5_sv,sv5_cn0,sv5_elevation,sv5_azimuth,sv5_flags,sv5_signal,sv6_sv,sv6_cn0,sv6_elevation,sv6_azimuth,sv6_flags,sv6_signal,sv7_sv,sv7_cn0,sv7_elevation,sv7_azimuth,sv7_flags,sv7_signal,sv8_sv,sv8_cn0,sv8_elevation,sv8_azimuth,sv8_flags,sv8_signal,sv9_sv,sv9_cn0,sv9_elevation,sv9_azimuth,sv9_flags,sv9_signal,sv10_sv,sv10_cn0,sv10_elevation,sv10_azimuth,sv10_flags,sv10_signal,sv11_sv,sv11_cn0,sv11_elevation,sv11_azimuth,sv11_flags,sv11_signal\n");
 
 	while (1) {
 
@@ -335,8 +373,8 @@ int main(void)
 
 		if (new_pvt_data) {
 			new_pvt_data = false;
-			//print_pvt_csv(&gps_data);
-			print_pvt_data(&gps_data);
+			print_pvt_csv(&gps_data);
+			//print_pvt_data(&gps_data);
 		}
 
 		if (got_first_fix && !printed_fix_time) {
