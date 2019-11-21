@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2018 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menu "GPS CSV logger"
+
+config AT_MAGPIO
+	string "MAGPIO command"
+	default "AT\%XMAGPIO=1,0,0,1,1,1574,1577" if BOARD_NRF9160_PCA10090NS
+	default ""
+	help
+	  MAGPIO command to run while setting up GPS
+
+config AT_COEX0
+	string "COEX0 command"
+	default "AT\%XCOEX0=1,1,1570,1580" if BOARD_NRF9160_PCA10090NS
+	default ""
+	help
+	  COEX0 command to run while setting up GPS
+
+endmenu
+
+menu "Zephyr Kernel"
+source "$ZEPHYR_BASE/Kconfig.zephyr"
+endmenu

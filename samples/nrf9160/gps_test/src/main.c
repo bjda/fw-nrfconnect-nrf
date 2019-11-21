@@ -14,17 +14,13 @@
 
 #define AT_IMEI		"AT+CGSN"
 
-#ifdef CONFIG_BOARD_NRF9160_PCA10090NS
-#define AT_MAGPIO      "AT\%XMAGPIO=1,0,0,1,1,1574,1577"
-#define AT_COEX0      "AT\%XCOEX0=1,1,1570,1580"
-#endif
+#define AT_MAGPIO      CONFIG_AT_MAGPIO
+#define AT_COEX0      CONFIG_AT_COEX0
 
 static const char     at_commands[][31]  = {
 				AT_XSYSTEMMODE,
-#ifdef CONFIG_BOARD_NRF9160_PCA10090NS
 				AT_MAGPIO,
 				AT_COEX0,
-#endif
 				AT_CFUN
 			};
 
@@ -63,6 +59,10 @@ static int enable_gps(void)
 	}
 
 	for (int i = 0; i < ARRAY_SIZE(at_commands); i++) {
+		/* Skip command if empty */
+		if (at_commands[i][0] == '\0')
+			continue;
+
 		bytes_sent = send(at_sock, at_commands[i],
 				  strlen(at_commands[i]), 0);
 
