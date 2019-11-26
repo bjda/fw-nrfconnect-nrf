@@ -237,7 +237,9 @@ static void print_satellite_stats(nrf_gnss_data_frame_t *pvt_data)
 
 static void print_pvt_csv(nrf_gnss_data_frame_t *pvt_data)
 {
+	static int seq = 0;
 	printf("%s,", imei);
+	printf("%d,", seq++);
 	printf("%d,", k_uptime_get_32());
 	printf("%f,", pvt_data->pvt.longitude);
 	printf("%f,", pvt_data->pvt.latitude);
@@ -365,7 +367,7 @@ int main(void)
 	gps_started = k_uptime_get_32();
 
 	printk("Getting GPS data...\n");
-	printk("imei,timestamp,longitude,latitude,altitude,accuracy,speed,heading,date,time,pdop,hdop,vdop,tdop,flags,sv0_sv,sv0_cn0,sv0_elevation,sv0_azimuth,sv0_flags,sv0_signal,sv1_sv,sv1_cn0,sv1_elevation,sv1_azimuth,sv1_flags,sv1_signal,sv2_sv,sv2_cn0,sv2_elevation,sv2_azimuth,sv2_flags,sv2_signal,sv3_sv,sv3_cn0,sv3_elevation,sv3_azimuth,sv3_flags,sv3_signal,sv4_sv,sv4_cn0,sv4_elevation,sv4_azimuth,sv4_flags,sv4_signal,sv5_sv,sv5_cn0,sv5_elevation,sv5_azimuth,sv5_flags,sv5_signal,sv6_sv,sv6_cn0,sv6_elevation,sv6_azimuth,sv6_flags,sv6_signal,sv7_sv,sv7_cn0,sv7_elevation,sv7_azimuth,sv7_flags,sv7_signal,sv8_sv,sv8_cn0,sv8_elevation,sv8_azimuth,sv8_flags,sv8_signal,sv9_sv,sv9_cn0,sv9_elevation,sv9_azimuth,sv9_flags,sv9_signal,sv10_sv,sv10_cn0,sv10_elevation,sv10_azimuth,sv10_flags,sv10_signal,sv11_sv,sv11_cn0,sv11_elevation,sv11_azimuth,sv11_flags,sv11_signal\n");
+	printk("imei,seq,timestamp,longitude,latitude,altitude,accuracy,speed,heading,date,time,pdop,hdop,vdop,tdop,flags,sv0_sv,sv0_cn0,sv0_elevation,sv0_azimuth,sv0_flags,sv0_signal,sv1_sv,sv1_cn0,sv1_elevation,sv1_azimuth,sv1_flags,sv1_signal,sv2_sv,sv2_cn0,sv2_elevation,sv2_azimuth,sv2_flags,sv2_signal,sv3_sv,sv3_cn0,sv3_elevation,sv3_azimuth,sv3_flags,sv3_signal,sv4_sv,sv4_cn0,sv4_elevation,sv4_azimuth,sv4_flags,sv4_signal,sv5_sv,sv5_cn0,sv5_elevation,sv5_azimuth,sv5_flags,sv5_signal,sv6_sv,sv6_cn0,sv6_elevation,sv6_azimuth,sv6_flags,sv6_signal,sv7_sv,sv7_cn0,sv7_elevation,sv7_azimuth,sv7_flags,sv7_signal,sv8_sv,sv8_cn0,sv8_elevation,sv8_azimuth,sv8_flags,sv8_signal,sv9_sv,sv9_cn0,sv9_elevation,sv9_azimuth,sv9_flags,sv9_signal,sv10_sv,sv10_cn0,sv10_elevation,sv10_azimuth,sv10_flags,sv10_signal,sv11_sv,sv11_cn0,sv11_elevation,sv11_azimuth,sv11_flags,sv11_signal\n");
 
 	while (1) {
 
