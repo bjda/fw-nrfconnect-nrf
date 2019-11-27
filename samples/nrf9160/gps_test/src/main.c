@@ -14,11 +14,13 @@
 
 #define AT_IMEI		"AT+CGSN"
 
-#define AT_MAGPIO      CONFIG_AT_MAGPIO
-#define AT_COEX0      CONFIG_AT_COEX0
+#define AT_MAGPIO_CLR   "AT\%XMAGPIO"
+#define AT_MAGPIO       CONFIG_AT_MAGPIO
+#define AT_COEX0        CONFIG_AT_COEX0
 
-static const char     at_commands[][31]  = {
+static const char     at_commands[][128]  = {
 				AT_XSYSTEMMODE,
+				AT_MAGPIO_CLR,
 				AT_MAGPIO,
 				AT_COEX0,
 				AT_CFUN
@@ -123,7 +125,7 @@ static int init_app(void)
 			      NRF_GNSS_NMEA_GGA_MASK |
 			      NRF_GNSS_NMEA_RMC_MASK;
 	nrf_gnss_elevation_mask_t elevation_mask = 0;
-	nrf_gnss_delete_mask_t  delete_mask  = 0;
+	nrf_gnss_delete_mask_t  delete_mask  = 0xFF; /* Delete all data for cold start */
 	int   retval;
 
 	if (get_imei(imei) != 0) {
