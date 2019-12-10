@@ -319,8 +319,9 @@ static void print_nmea_data(void)
 int process_gps_data(nrf_gnss_data_frame_t *gps_data)
 {
 	int retval;
-
-	retval = nrf_recv(fd, gps_data, sizeof(nrf_gnss_data_frame_t), 0);
+	//printk("before nrf_recv\n");
+	retval = nrf_recv(fd, gps_data, sizeof(nrf_gnss_data_frame_t), NRF_MSG_DONTWAIT);
+	//printk("after nrf_recv, r%d, id%d\n",retval,gps_data->data_id);
 
 	if (retval > 0) {
 
@@ -384,7 +385,11 @@ int main(void)
 
 	while (1) {
 
-		process_gps_data(&gps_data);
+		do {
+			/* Loop until we don't have more
+			 * data to read
+			 */
+		} while (process_gps_data(&gps_data) > 0);
 		
 		if (new_pvt_data) {
 			new_pvt_data = false;
@@ -399,6 +404,8 @@ int main(void)
 			printk("***** First fix time: %d\n",
 				k_uptime_get_32() - gps_started);
 		}
+
+		k_sleep(K_MSEC(500));
 	}
 
 	return 0;
