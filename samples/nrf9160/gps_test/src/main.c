@@ -394,7 +394,7 @@ int main(void)
 		if (new_pvt_data) {
 			new_pvt_data = false;
 			gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN, cnt0++ % 2);
-			print_pvt_csv(&gps_data);
+			print_pvt_csv(&last_pvt);
 			//print_pvt_data(&gps_data);
 		}
 
