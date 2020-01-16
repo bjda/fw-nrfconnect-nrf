@@ -86,6 +86,11 @@ config AT_HOST_THREAD_PRIO
 	default 0 if !MULTITHREADING
 	default 10
 
+config AT_HOST_THREAD_STACK_SIZE
+	int
+	default 512 if SIZE_OPTIMIZATIONS
+	default 1024
+
 module = AT_HOST
 module-str = AT host
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
