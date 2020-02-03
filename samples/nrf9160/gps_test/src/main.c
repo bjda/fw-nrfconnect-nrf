@@ -17,6 +17,9 @@
 #define AT_IMEI		"AT+CGSN"
 
 #define AT_MAGPIO_CLR   "AT\%XMAGPIO"
+
+#define AT_RFTEST	"AT\%XRFTEST=2,1"
+
 #define AT_MAGPIO       CONFIG_AT_MAGPIO
 #define AT_COEX0        CONFIG_AT_COEX0
 
@@ -138,7 +141,7 @@ static int init_app(void)
 		printk("Failed to enable GPS\n");
 		return -1;
 	}
-
+	/*
 	fd = nrf_socket(NRF_AF_LOCAL, NRF_SOCK_DGRAM, NRF_PROTO_GNSS);
 
 	if (fd >= 0) {
@@ -202,7 +205,7 @@ static int init_app(void)
 		printk("Failed to start GPS: %d\n",retval);
 		return -1;
 	}
-
+	*/
 	return 0;
 }
 
@@ -363,6 +366,17 @@ int main(void)
 	bool printed_fix_time = false;
 	u32_t gps_started;
 
+	int  at_sock;
+	int  bytes_sent;
+	int  bytes_received;
+	char buf[128];
+
+	s32_t snr_raw;
+	s32_t ant_pwr_raw;
+	float snr;
+	float ant_pwr;
+	char dummy[128];
+
 	printk("Staring GPS application\n");
 
 	if (init_app() != 0) {
@@ -382,30 +396,20 @@ int main(void)
 	gpio_pin_configure(dev, DT_ALIAS_LED0_GPIOS_PIN, GPIO_DIR_OUT);
 	gpio_pin_configure(dev, DT_ALIAS_LED1_GPIOS_PIN, GPIO_DIR_OUT);
 	gpio_pin_configure(dev, DT_ALIAS_LED2_GPIOS_PIN, GPIO_DIR_OUT);
-
+	at_sock = socket(AF_LTE, 0, NPROTO_AT);
 	while (1) {
-
-		do {
-			/* Loop until we don't have more
-			 * data to read
-			 */
-		} while (process_gps_data(&gps_data) > 0);
-		
-		if (new_pvt_data) {
-			new_pvt_data = false;
-			gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN, cnt0++ % 2);
-			print_pvt_csv(&last_pvt);
-			//print_pvt_data(&gps_data);
-		}
-
-		if (got_first_fix && !printed_fix_time) {
-			printed_fix_time = true;
-			gpio_pin_write(dev, DT_ALIAS_LED1_GPIOS_PIN, 1);
-			printk("***** First fix time: %d\n",
-				k_uptime_get_32() - gps_started);
-		}
-
-		k_sleep(K_MSEC(500));
+		bytes_sent = send(at_sock, AT_RFTEST,
+				strlen(AT_RFTEST), 0);
+		gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN,1);
+		k_sleep(K_MSEC(100));
+		bytes_received = recv(at_sock, buf, 128, 0);
+		//printf("%s",buf);
+		sscanf(buf,"%s %d,%d",dummy, &snr_raw, &ant_pwr_raw);
+		snr = snr_raw / 16.0f;
+		ant_pwr = ant_pwr_raw / 256.0f;
+		printf("%.2f,%.2f\n",snr,ant_pwr);
+		gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN,0);
+		k_sleep(K_MSEC(900));
 	}
 
 	return 0;
