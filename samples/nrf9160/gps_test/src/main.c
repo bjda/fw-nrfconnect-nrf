@@ -41,7 +41,7 @@ static bool 	      new_pvt_data;
 static u64_t          fix_timestamp;
 nrf_gnss_data_frame_t last_pvt;
 
-static char imei[15];
+static char imei[16];
 
 void bsd_recoverable_error_handler(uint32_t error)
 {
@@ -401,15 +401,15 @@ int main(void)
 		bytes_sent = send(at_sock, AT_RFTEST,
 				strlen(AT_RFTEST), 0);
 		gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN,1);
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(1));
 		bytes_received = recv(at_sock, buf, 128, 0);
 		//printf("%s",buf);
 		sscanf(buf,"%s %d,%d",dummy, &snr_raw, &ant_pwr_raw);
 		snr = snr_raw / 16.0f;
 		ant_pwr = ant_pwr_raw / 256.0f;
-		printf("%.2f,%.2f\n",snr,ant_pwr);
+		printf("%s,%.2f,%.2f\n",imei,snr,ant_pwr,);
 		gpio_pin_write(dev, DT_ALIAS_LED0_GPIOS_PIN,0);
-		k_sleep(K_MSEC(900));
+		k_sleep(K_MSEC(9));
 	}
 
 	return 0;
