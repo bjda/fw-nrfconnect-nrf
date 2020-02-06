@@ -58,6 +58,24 @@ config NRF_CLOUD_MQTT_PAYLOAD_BUFFER_LEN
 	int "Size of the buffer for MQTT PUBLISH payload."
 	default 2048
 
+menu "nRF Cloud A-GPS"
+
+config NRF_CLOUD_AGPS
+	bool "Enable nRF Cloud A-GPS"
+	depends on NRF9160_GPS
+	select BASE64
+
+if NRF_CLOUD_AGPS
+config NRF_CLOUD_AGPS_AUTO
+	bool "Automatically request A-GPS on bootup"
+
+module = NRF_CLOUD_AGPS
+module-str = nRF Cloud A-GPS
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+endif # NRF_CLOUD_AGPS"
+endmenu
+
 module=NRF_CLOUD
 module-dep=LOG
 module-str=Log level for nRF Cloud
