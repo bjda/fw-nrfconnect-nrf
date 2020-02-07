@@ -50,6 +50,7 @@ struct gps_drv_data {
 	struct k_thread thread;
 	k_tid_t thread_id;
 	struct k_sem thread_run_sem;
+	struct k_delayed_work timeout_check_work;
 };
 
 static u64_t fix_timestamp;
@@ -168,6 +169,18 @@ static void notify_event(struct device *dev, struct gps_event *evt)
 	}
 }
 
+static void timeout_check_work_fn(struct k_work *work)
+{
+	struct gps_drv_data *drv_data =
+		CONTAINER_OF(work, struct gps_drv_data, timeout_check_work);
+	struct device *dev = CONTAINER_OF(drv_data, struct device, driver_data);
+	struct gps_event evt = {
+		.type = GPS_EVT_SEARCH_TIMEOUT
+	};
+
+	notify_event(dev, &evt);
+}
+
 static void gps_thread(int dev_ptr)
 {
 	struct device *dev = INT_TO_POINTER(dev_ptr);
@@ -175,9 +188,14 @@ static void gps_thread(int dev_ptr)
 	int len;
 	bool operation_blocked = false;
 	bool has_fix = false;
+	struct gps_event evt = {
+		.type = GPS_EVT_SEARCH_STARTED
+	};
 
 wait:
 	k_sem_take(&drv_data->thread_run_sem, K_FOREVER);
+
+	notify_event(dev, &evt);
 
 	while (true) {
 		nrf_gnss_data_frame_t raw_gps_data;
@@ -378,14 +396,10 @@ static int start(struct device *dev, struct gps_config *cfg)
 			delete_mask = 0xFF;
 		}
 
-		if (cfg->timeout < 0) {
-			cfg->timeout = 0;
-		}
-
 		switch (cfg->nav_mode) {
 		case GPS_NAV_MODE_SINGLE_FIX:
 			fix_interval = 0;
-			fix_retry = cfg->timeout;
+			fix_retry = cfg->timeout < 0 ? 0 : cfg->timeout ;
 			break;
 		case GPS_NAV_MODE_CONTINUOUS:
 			fix_retry = 0;
@@ -526,6 +540,8 @@ static int init(struct device *dev, gps_event_handler_t handler)
 		}
 	}
 
+	k_delayed_work_init(&drv_data->timeout_check_work,
+		timeout_check_work_fn);
 	k_sem_init(&drv_data->thread_run_sem, 0, 1);
 
 	err = init_thread(dev);
@@ -556,7 +572,6 @@ static int deinit(struct device *dev)
 
 static int setup(struct device *dev)
 {
-	int err;
 	struct gps_drv_data *drv_data = dev->driver_data;
 
 	drv_data->socket = -1;
@@ -594,6 +609,9 @@ static int stop(struct device *dev)
 {
 	struct gps_drv_data *drv_data = dev->driver_data;
 	int retval;
+	struct gps_event evt = {
+		.type = GPS_EVT_SEARCH_STOPPED
+	};
 
 	LOG_DBG("Stopping GPS");
 	atomic_set(&drv_data->gps_is_active, 0);
@@ -607,6 +625,8 @@ static int stop(struct device *dev)
 		LOG_ERR("Failed to stop GPS");
 		return -EIO;
 	}
+
+	notify_event(dev, &evt);
 
 	return 0;
 }
