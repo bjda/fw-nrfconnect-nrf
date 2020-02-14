@@ -12,7 +12,6 @@
 #include <nrfx.h>
 
 #include <nrf_cloud_agps.h>
-#include <sys/base64.h>
 
 #include <nrf_socket.h>
 #include <net/socket.h>
@@ -65,20 +64,10 @@ static void print_pvt_data(struct gps_pvt *pvt_data)
 static void process_agps_data(char *buf, size_t len)
 {
 	int err;
-	size_t olen;
-	char decoded_buf[2500];
 
 	printk("Starting A-GPS test\n");
 
-	err = base64_decode(decoded_buf, sizeof(decoded_buf), &olen, buf, len);
-	if (err) {
-		printk("Base64 encoded data could not be decoded, err: %d\n", err);
-		return;
-	}
-
-	printk("Base64: %d bytes written to buffer\n", olen);
-
-	err = nrf_cloud_agps_process(decoded_buf, olen, NULL);
+	err = nrf_cloud_agps_process(buf, len, NULL);
 	if (err) {
 		printk("A-GPS failed, error: %d\n", err);
 	} else {
