@@ -31,7 +31,6 @@
 #include "env_sensors.h"
 #include "motion.h"
 #include "ui.h"
-#include "gps_controller.h"
 #include "service_info.h"
 #include "at_cmd.h"
 #include "watchdog.h"
@@ -99,7 +98,8 @@ static struct k_work_q application_work_q;
 static struct cloud_backend *cloud_backend;
 
 /* Sensor data */
-static struct gps_data gps_data;
+static struct gps_nmea gps_data;
+static struct device *gps_dev;
 static struct cloud_channel_data gps_cloud_data;
 static struct cloud_channel_data button_cloud_data;
 static struct cloud_channel_data device_cloud_data = {
@@ -112,6 +112,7 @@ static struct modem_param_info modem_param;
 static struct cloud_channel_data signal_strength_cloud_data;
 #endif /* CONFIG_MODEM_INFO */
 static atomic_val_t send_data_enable;
+static atomic_val_t gps_is_active;
 
 /* Flag used for flip detection */
 static bool flip_mode_enabled = true;
@@ -164,16 +165,12 @@ static void work_init(void);
 static void sensor_data_send(struct cloud_channel_data *data);
 static void device_status_send(struct k_work *work);
 static void cycle_cloud_connection(struct k_work *work);
-static void set_gps_enable(const bool enable);
+static void enable_gps(bool enable);
 
 /**@brief nRF Cloud error handler. */
 void error_handler(enum error_type err_type, int err_code)
 {
 	if (err_type == ERROR_CLOUD) {
-		if (gps_control_is_enabled()) {
-			LOG_ERR("Reboot");
-			sys_reboot(0);
-		}
 #if defined(CONFIG_LTE_LINK_CONTROL)
 		/* Turn off and shutdown modem */
 		LOG_ERR("LTE link disconnect");
@@ -314,38 +311,57 @@ static void send_modem_at_cmd_work_fn(struct k_work *work)
 	k_sem_give(&modem_at_cmd_sem);
 }
 
-/**@brief Callback for GPS trigger events */
-static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
+static void gps_handler(struct device *dev, struct gps_event *evt)
 {
-	static u32_t fix_count;
+	switch (evt->type) {
+	case GPS_EVT_SEARCH_STARTED:
+		LOG_INF("GPS_EVT_SEARCH_STARTED");
+		break;
+	case GPS_EVT_SEARCH_STOPPED:
+		LOG_INF("GPS_EVT_SEARCH_STOPPED");
+		break;
+	case GPS_EVT_SEARCH_TIMEOUT:
+		LOG_INF("GPS_EVT_SEARCH_TIMEOUT");
+		break;
+	case GPS_EVT_PVT:
+		/* Don't spam logs */
+		break;
+	case GPS_EVT_PVT_FIX:
+		LOG_INF("GPS_EVT_PVT_FIX");
+		break;
+	case GPS_EVT_NMEA:
+		/* Don't spam logs */
+		break;
+	case GPS_EVT_NMEA_FIX:
+		memcpy(gps_data.buf, evt->nmea.buf, evt->nmea.len);
+		gps_data.len = evt->nmea.len;
+		gps_cloud_data.data.buf = gps_data.buf;
+		gps_cloud_data.data.len = gps_data.len;
+		gps_cloud_data.tag += 1;
 
-	ARG_UNUSED(trigger);
+		if (gps_cloud_data.tag == 0) {
+			gps_cloud_data.tag = 0x1;
+		}
 
-	if (!atomic_get(&send_data_enable)) {
-		return;
+		ui_led_set_pattern(UI_LED_GPS_FIX);
+		k_work_submit_to_queue(&application_work_q, &send_gps_data_work);
+		env_sensors_poll();
+		break;
+	case GPS_EVT_NO_TIME_WINDOW:
+		LOG_INF("GPS_EVT_NO_TIME_WINDOW");
+		break;
+	case GPS_EVT_HAS_TIME_WINDOW:
+		LOG_INF("GPS_EVT_HAS_TIME_WINDOW");
+		break;
+	case GPS_EVT_AGPS_DATA_NEEDED:
+		LOG_INF("GPS_EVT_AGPS_DATA_NEEDED");
+		break;
+	case GPS_EVT_ERROR:
+		LOG_INF("GPS_EVT_ERROR\n");
+		break;
+	default:
+		break;
 	}
-
-	if (++fix_count < CONFIG_GPS_CONTROL_FIX_COUNT) {
-		return;
-	}
-
-	fix_count = 0;
-
-	ui_led_set_pattern(UI_LED_GPS_FIX);
-
-	gps_sample_fetch(dev);
-	gps_channel_get(dev, GPS_CHAN_NMEA, &gps_data);
-	gps_cloud_data.data.buf = gps_data.nmea.buf;
-	gps_cloud_data.data.len = gps_data.nmea.len;
-	gps_cloud_data.tag += 1;
-
-	if (gps_cloud_data.tag == 0) {
-		gps_cloud_data.tag = 0x1;
-	}
-
-	gps_control_stop(K_NO_WAIT);
-	k_work_submit_to_queue(&application_work_q, &send_gps_data_work);
-	env_sensors_poll();
 }
 
 #if defined(CONFIG_USE_UI_MODULE)
@@ -386,8 +402,7 @@ static void motion_handler(motion_data_t  motion_data)
 		return;
 	}
 
-	if (!flip_mode_enabled || !atomic_get(&send_data_enable)
-		|| gps_control_is_active()) {
+	if (!flip_mode_enabled || !atomic_get(&send_data_enable)) {
 		return;
 	}
 
@@ -447,7 +462,7 @@ static void cloud_cmd_handler(struct cloud_command *cmd)
 	if ((cmd->channel == CLOUD_CHANNEL_GPS) &&
 	    (cmd->group == CLOUD_CMD_GROUP_CFG_SET) &&
 	    (cmd->type == CLOUD_CMD_ENABLE)) {
-		set_gps_enable(cmd->data.sv.state == CLOUD_CMD_STATE_TRUE);
+		enable_gps(cmd->data.sv.state == CLOUD_CMD_STATE_TRUE);
 	} else if ((cmd->channel == CLOUD_CHANNEL_MODEM) &&
 		   (cmd->group == CLOUD_CMD_GROUP_COMMAND) &&
 		   (cmd->type == CLOUD_CMD_DATA_STRING)) {
@@ -646,11 +661,6 @@ static void env_data_send(void)
 		return;
 	}
 
-	if (gps_control_is_active()) {
-		env_sensors_set_backoff_enable(true);
-		return;
-	}
-
 	env_sensors_set_backoff_enable(false);
 
 	if (env_sensors_get_temperature(&env_data) == 0) {
@@ -714,7 +724,7 @@ void light_sensor_data_send(void)
 	struct cloud_msg msg = { .qos = CLOUD_QOS_AT_MOST_ONCE,
 				 .endpoint.type = CLOUD_EP_TOPIC_MSG };
 
-	if (!atomic_get(&send_data_enable) || gps_control_is_active()) {
+	if (!atomic_get(&send_data_enable)) {
 		return;
 	}
 
@@ -763,7 +773,7 @@ static void sensor_data_send(struct cloud_channel_data *data)
 		msg.endpoint.type = CLOUD_EP_TOPIC_STATE;
 	}
 
-	if (!atomic_get(&send_data_enable) || gps_control_is_active()) {
+	if (!atomic_get(&send_data_enable)) {
 		return;
 	}
 
@@ -865,7 +875,7 @@ void cloud_event_handler(const struct cloud_backend *const backend,
 		k_delayed_work_cancel(&cloud_reboot_work);
 		ui_led_set_pattern(UI_CLOUD_CONNECTED);
 		break;
-	case CLOUD_EVT_READY:
+	case CLOUD_EVT_READY: {
 		LOG_INF("CLOUD_EVT_READY");
 		ui_led_set_pattern(UI_CLOUD_CONNECTED);
 
@@ -876,6 +886,7 @@ void cloud_event_handler(const struct cloud_backend *const backend,
 
 		sensors_start();
 		break;
+	}
 	case CLOUD_EVT_DISCONNECTED:
 		LOG_INF("CLOUD_EVT_DISCONNECTED");
 		ui_led_set_pattern(UI_LTE_DISCONNECTED);
@@ -888,10 +899,17 @@ void cloud_event_handler(const struct cloud_backend *const backend,
 	case CLOUD_EVT_DATA_SENT:
 		LOG_INF("CLOUD_EVT_DATA_SENT");
 		break;
-	case CLOUD_EVT_DATA_RECEIVED:
+	case CLOUD_EVT_DATA_RECEIVED: {
+		int err;
+
 		LOG_INF("CLOUD_EVT_DATA_RECEIVED");
-		cloud_decode_command(evt->data.msg.buf);
+		err = cloud_decode_command(evt->data.msg.buf);
+		if (err == 0) {
+			/* Cloud decoder has handled the data */
+			return;
+		}
 		break;
+	}
 	case CLOUD_EVT_PAIR_REQUEST:
 		LOG_INF("CLOUD_EVT_PAIR_REQUEST");
 		on_user_pairing_req(evt);
@@ -927,32 +945,50 @@ static void app_connect(struct k_work *work)
 	}
 }
 
-static void set_gps_enable(const bool enable)
+static void enable_gps(bool enable)
 {
-	if (enable == gps_control_is_enabled()) {
+	int err;
+	if (!atomic_get(&send_data_enable)) {
+		LOG_INF("LTE link not ready, long press disregarded");
 		return;
 	}
 
 	if (enable) {
-		LOG_INF("Starting GPS");
-		gps_control_enable();
-		gps_control_start(K_SECONDS(1));
+		struct gps_config gps_cfg = {
+			.nav_mode = GPS_NAV_MODE_PERIODIC,
+			.power_mode = GPS_POWER_MODE_DISABLED,
+			.timeout = CONFIG_GPS_CONTROL_FIX_TRY_TIME,
+			.interval = CONFIG_GPS_CONTROL_FIX_TRY_TIME +
+				CONFIG_GPS_CONTROL_FIX_CHECK_INTERVAL,
+		};
 
-	} else {
-		LOG_INF("Stopping GPS");
-		gps_control_disable();
+		err = gps_start(gps_dev, &gps_cfg);
+		if (err) {
+			LOG_ERR("Failed to start GPS, error: %d", err);
+			return;
+		}
+
+		atomic_set(&gps_is_active, 1);
+		LOG_INF("GPS started");
+
+		return;
 	}
+
+	err = gps_stop(gps_dev);
+	if (err) {
+		LOG_ERR("Failed to stop GPS, error: %d", err);
+		return;
+	}
+
+	LOG_INF("GPS stopped");
+	atomic_set(&gps_is_active, 0);
 }
 
 static void long_press_handler(struct k_work *work)
 {
-	if (!atomic_get(&send_data_enable)) {
-		LOG_INF("Link not ready, long press disregarded");
-		return;
-	}
+	ARG_UNUSED(work);
 
-	/* Toggle GPS state */
-	set_gps_enable(!gps_control_is_enabled());
+	enable_gps(atomic_get(&gps_is_active) == 0);
 }
 
 /**@brief Initializes and submits delayed work. */
@@ -1058,9 +1094,16 @@ static void sensors_init(void)
 		button_sensor_init();
 	}
 
-	gps_control_init(&application_work_q, gps_trigger_handler);
-	if (IS_ENABLED(CONFIG_GPS_START_AFTER_CLOUD_EVT_READY)) {
-		set_gps_enable(true);
+	gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
+	if (gps_dev == NULL) {
+		LOG_ERR("Could not get binding to %s",
+			log_strdup(CONFIG_GPS_DEV_NAME));
+	}
+
+	err = gps_init(gps_dev, gps_handler);
+	if (err) {
+		LOG_ERR("GPS could not be initialized");
+		return;
 	}
 }
 

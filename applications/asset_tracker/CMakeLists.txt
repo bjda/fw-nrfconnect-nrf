@@ -33,7 +33,6 @@ zephyr_library_include_directories(
 add_subdirectory(src/motion)
 add_subdirectory(src/ui)
 add_subdirectory(src/cloud_codec)
-add_subdirectory(src/gps_controller)
 add_subdirectory(src/env_sensors)
 add_subdirectory_ifdef(CONFIG_WATCHDOG src/watchdog)
 add_subdirectory_ifdef(CONFIG_LIGHT_SENSOR src/light_sensor)
