@@ -42,8 +42,10 @@ LOG_MODULE_REGISTER(nrf9160_gps, CONFIG_NRF9160_GPS_LOG_LEVEL);
 #define sv_unhealthy_str(x) ((x)?"not healthy":"    healthy")
 
 struct gps_drv_data {
+	struct device *dev;
 	gps_event_handler_t handler;
-	atomic_t gps_is_active;
+	atomic_t is_init;
+	atomic_t is_active;
 	int socket;
 	K_THREAD_STACK_MEMBER(thread_stack,
 			      CONFIG_NRF9160_GPS_THREAD_STACK_SIZE);
@@ -164,7 +166,7 @@ static void notify_event(struct device *dev, struct gps_event *evt)
 {
 	struct gps_drv_data *drv_data = dev->driver_data;
 
-	if (atomic_get(&drv_data->gps_is_active) && drv_data->handler) {
+	if (atomic_get(&drv_data->is_active) && drv_data->handler) {
 		drv_data->handler(dev, evt);
 	}
 }
@@ -173,7 +175,7 @@ static void timeout_check_work_fn(struct k_work *work)
 {
 	struct gps_drv_data *drv_data =
 		CONTAINER_OF(work, struct gps_drv_data, timeout_check_work);
-	struct device *dev = CONTAINER_OF(drv_data, struct device, driver_data);
+	struct device *dev = drv_data->dev;
 	struct gps_event evt = {
 		.type = GPS_EVT_SEARCH_TIMEOUT
 	};
@@ -198,14 +200,14 @@ wait:
 	notify_event(dev, &evt);
 
 	while (true) {
-		nrf_gnss_data_frame_t raw_gps_data;
+		nrf_gnss_data_frame_t raw_gps_data = {0};
 		struct gps_event evt = {0};
 
 		len = recv(drv_data->socket, &raw_gps_data,
 			   sizeof(nrf_gnss_data_frame_t), 0);
 		if (len <= 0) {
 			/* Is the GPS stopped, causing this error? */
-			if (!atomic_get(&drv_data->gps_is_active)) {
+			if (!atomic_get(&drv_data->is_active)) {
 				goto wait;
 			}
 
@@ -260,6 +262,8 @@ wait:
 				evt.type = GPS_EVT_PVT_FIX;
 				fix_timestamp = k_uptime_get();
 				has_fix = true;
+				k_delayed_work_cancel(
+					&drv_data->timeout_check_work);
 			} else {
 				evt.type = GPS_EVT_PVT;
 			}
@@ -390,6 +394,7 @@ static int start(struct device *dev, struct gps_config *cfg)
 	nrf_gnss_fix_interval_t fix_interval;
 	nrf_gnss_nmea_mask_t nmea_mask = 0;
 	nrf_gnss_delete_mask_t delete_mask = 0;
+	bool start_retry_timer = false;
 
 	if (cfg) {
 		if (cfg->delete_agps_data) {
@@ -413,6 +418,7 @@ static int start(struct device *dev, struct gps_config *cfg)
 
 			fix_retry = cfg->timeout;
 			fix_interval = cfg->interval;
+			start_retry_timer = true;
 			break;
 		default:
 			LOG_ERR("Invalid mode %d, GPS will not start",
@@ -507,7 +513,12 @@ static int start(struct device *dev, struct gps_config *cfg)
 		return -EIO;
 	}
 
-	atomic_set(&drv_data->gps_is_active, 1);
+	if (start_retry_timer) {
+		k_delayed_work_submit(&drv_data->timeout_check_work,
+				K_SECONDS(cfg->timeout));
+	}
+
+	atomic_set(&drv_data->is_active, 1);
 	k_sem_give(&drv_data->thread_run_sem);
 
 	LOG_DBG("GPS operational");
@@ -519,6 +530,12 @@ static int init(struct device *dev, gps_event_handler_t handler)
 {
 	struct gps_drv_data *drv_data = dev->driver_data;
 	int err;
+
+	if (drv_data->is_init) {
+		LOG_WRN("GPS is already initialized");
+
+		return -EALREADY;
+	}
 
 	if (handler == NULL) {
 		LOG_ERR("No event handler provided");
@@ -551,32 +568,20 @@ static int init(struct device *dev, gps_event_handler_t handler)
 		return err;
 	}
 
-	return 0;
-}
-
-static int deinit(struct device *dev)
-{
-	struct gps_drv_data *drv_data = dev->driver_data;
-
-	LOG_DBG("Closing GPS socket");
-	close(drv_data->socket);
-
-	drv_data->socket = -1;
-	drv_data->handler = NULL;
-
-	LOG_DBG("Terminating GPS thread");
-	k_thread_abort(drv_data->thread_id);
+	drv_data->is_init = true;
 
 	return 0;
 }
 
 static int setup(struct device *dev)
 {
+	int err = 0;
 	struct gps_drv_data *drv_data = dev->driver_data;
 
 	drv_data->socket = -1;
+	drv_data->dev = dev;
 
-	atomic_set(&drv_data->gps_is_active, 0);
+	atomic_set(&drv_data->is_active, 0);
 
 #if CONFIG_NRF9160_GPS_SET_MAGPIO
 	err = at_cmd_write(CONFIG_NRF9160_GPS_MAGPIO_STRING,
@@ -602,19 +607,20 @@ static int setup(struct device *dev)
 		log_strdup(CONFIG_NRF9160_GPS_COEX0_STRING));
 #endif /* CONFIG_NRF9160_GPS_SET_COEX0 */
 
-	return 0;
+	return err;
 }
 
-static int stop(struct device *dev)
+static int stop_gps(struct device *dev, bool is_timeout)
 {
 	struct gps_drv_data *drv_data = dev->driver_data;
 	int retval;
 	struct gps_event evt = {
-		.type = GPS_EVT_SEARCH_STOPPED
+		.type = is_timeout ? GPS_EVT_SEARCH_TIMEOUT :
+				     GPS_EVT_SEARCH_STOPPED
 	};
 
-	LOG_DBG("Stopping GPS");
-	atomic_set(&drv_data->gps_is_active, 0);
+	atomic_set(&drv_data->is_active, 0);
+	LOG_DBG("Stopping GPS%s", is_timeout ? " due to timeout" : "");
 
 	retval = nrf_setsockopt(drv_data->socket,
 				NRF_SOL_GNSS,
@@ -622,13 +628,19 @@ static int stop(struct device *dev)
 				NULL,
 				0);
 	if (retval != 0) {
-		LOG_ERR("Failed to stop GPS");
+		LOG_ERR("Failed to stop GPS%s",
+			is_timeout ? " after timeout" : "");
 		return -EIO;
 	}
 
 	notify_event(dev, &evt);
 
 	return 0;
+}
+
+static int stop(struct device *dev)
+{
+	return stop_gps(dev, false);
 }
 
 static int agps_write(struct device *dev, enum gps_agps_type type, void *data,
@@ -654,7 +666,6 @@ static struct gps_drv_data gps_drv_data;
 
 static const struct gps_driver_api gps_api_funcs = {
 	.init = init,
-	.deinit = deinit,
 	.start = start,
 	.stop = stop,
 	.agps_write = agps_write,
