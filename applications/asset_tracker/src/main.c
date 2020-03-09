@@ -36,6 +36,8 @@
 #include "at_cmd.h"
 #include "watchdog.h"
 
+#include <drivers/i2c.h>
+
 #include <logging/log.h>
 LOG_MODULE_REGISTER(asset_tracker, CONFIG_ASSET_TRACKER_LOG_LEVEL);
 
@@ -1282,11 +1284,72 @@ void handle_bsdlib_init_ret(void)
 	#endif /* CONFIG_BSD_LIBRARY */
 }
 
+static struct device *i2c_dev;
+#define EEPROM_ADDR 0x50
+
+int app_i2c_init(void){
+	u32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
+
+	i2c_dev = device_get_binding(DT_NORDIC_NRF_TWIM_I2C_2_LABEL);
+	return i2c_configure(i2c_dev,i2c_cfg);
+}
+
+bool eeprom_is_present(void){
+	u8_t dummy_buf[1];
+	int err;
+
+	err = i2c_read(i2c_dev,dummy_buf,sizeof(dummy_buf),EEPROM_ADDR);
+	if (err == 0){
+		return true;
+	}
+	return false;
+}
+
+void sample_main(void){
+	int ret = app_i2c_init();
+	LOG_INF("I2C Init->%d",ret);
+
+	bool present = eeprom_is_present();
+	LOG_INF("EEPROM Present: %d",present);
+}
+
+int eeprom_write_version(){
+
+}
+
+int eeprom_read_version(){
+
+}
+
+int eeprom_protect(void){
+
+}
+
 void main(void)
 {
 	int ret;
 
-	LOG_INF("Asset tracker started");
+	LOG_INF("Asset tracker mod started");
+
+	u8_t wrbuf[] = {0x01,0x2B,0x45,0x67,0x89};
+	u8_t wrbuf2[] = {0xFE,0xAA};
+	u8_t rdbuf[] = {0xDC,0xDC,0xDC,0xDC};
+
+	ret = app_i2c_init();
+	LOG_INF("I2C Init->%d",ret);
+
+	bool present = eeprom_is_present();
+	LOG_INF("EEPROM Present: %d",present);
+	
+	ret = i2c_write(i2c_dev,wrbuf,sizeof(wrbuf),0x50);
+	LOG_INF("Write->%d",ret);
+	k_sleep(50); // actually 5
+	ret = i2c_write_read(i2c_dev,0x50,wrbuf2,sizeof(wrbuf2),rdbuf,sizeof(rdbuf));
+
+	LOG_INF("Read->%d: 0x%x 0x%x 0x%x 0x%x",ret,rdbuf[0],rdbuf[1],rdbuf[2],rdbuf[3]);
+
+	while(1);
+
 	k_work_q_start(&application_work_q, application_stack_area,
 		       K_THREAD_STACK_SIZEOF(application_stack_area),
 		       CONFIG_APPLICATION_WORKQUEUE_PRIORITY);
