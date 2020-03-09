@@ -1286,6 +1286,23 @@ void handle_bsdlib_init_ret(void)
 
 static struct device *i2c_dev;
 #define EEPROM_ADDR 0x50
+#define BOARD_ID_MAGIC = 0x24519142
+
+struct board_id {
+	u32_t magic;
+	u32_t pca;
+	u32_t version;
+	u32_t checksum;
+};
+
+int board_id_make_checksum(struct board_id *board) {
+	if (board == NULL) {
+		return EINVAL;
+	}
+
+	board->checksum = board->magic ^ board->pca ^ board->version;
+	return 0;
+}
 
 int app_i2c_init(void){
 	u32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_MASTER;
@@ -1313,11 +1330,16 @@ void sample_main(void){
 	LOG_INF("EEPROM Present: %d",present);
 }
 
-int eeprom_write_version(){
-
+int eeprom_write_board_id(void){
+	struct board_id board = {
+		.magic = BOARD_ID_MAGIC,
+		.pca = 20035,
+		.version = 0x01040000,
+	};
+	board_id_make_checksum(&board);
 }
 
-int eeprom_read_version(){
+int eeprom_read_board_id(){
 
 }
 
@@ -1332,8 +1354,8 @@ void main(void)
 	LOG_INF("Asset tracker mod started");
 
 	u8_t wrbuf[] = {0x01,0x2B,0x45,0x67,0x89};
-	u8_t wrbuf2[] = {0xFE,0xAA};
-	u8_t rdbuf[] = {0xDC,0xDC,0xDC,0xDC};
+	u8_t wrbuf2[] = {0x80,0x00};
+	u8_t rdbuf[2];
 
 	ret = app_i2c_init();
 	LOG_INF("I2C Init->%d",ret);
@@ -1341,12 +1363,12 @@ void main(void)
 	bool present = eeprom_is_present();
 	LOG_INF("EEPROM Present: %d",present);
 	
-	ret = i2c_write(i2c_dev,wrbuf,sizeof(wrbuf),0x50);
-	LOG_INF("Write->%d",ret);
+	//ret = i2c_write(i2c_dev,wrbuf,sizeof(wrbuf),0x50);
+	//LOG_INF("Write->%d",ret);
 	k_sleep(50); // actually 5
 	ret = i2c_write_read(i2c_dev,0x50,wrbuf2,sizeof(wrbuf2),rdbuf,sizeof(rdbuf));
 
-	LOG_INF("Read->%d: 0x%x 0x%x 0x%x 0x%x",ret,rdbuf[0],rdbuf[1],rdbuf[2],rdbuf[3]);
+	LOG_INF("Read->%d: 0x%x 0x%x",ret,rdbuf[0],rdbuf[1]);
 
 	while(1);
 
