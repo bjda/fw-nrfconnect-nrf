@@ -1286,7 +1286,7 @@ void handle_bsdlib_init_ret(void)
 
 static struct device *i2c_dev;
 #define EEPROM_ADDR 0x50
-#define BOARD_ID_MAGIC = 0x24519142
+#define BOARD_ID_MAGIC 0x24519142
 
 struct board_id {
 	u32_t magic;
@@ -1322,12 +1322,92 @@ bool eeprom_is_present(void){
 	return false;
 }
 
-void sample_main(void){
-	int ret = app_i2c_init();
-	LOG_INF("I2C Init->%d",ret);
+int eeprom_verify(u16_t addr, const void *buf, size_t len, bool *verified){
+	int ret;
+	u8_t read_byte;
+	u8_t buf_addr[] = {(u8_t)((addr >> 8) & 0xFF), (u8_t)((addr) & 0xFF)};
 
-	bool present = eeprom_is_present();
-	LOG_INF("EEPROM Present: %d",present);
+	*verified = false;
+
+	/* Set adress pointer */
+	ret = i2c_write(i2c_dev, buf_addr, sizeof(buf_addr), EEPROM_ADDR);
+	if (ret) {
+		LOG_ERR("I2C write failed: %d.",ret);
+		return ret;
+	}
+
+	for (size_t i = 0; i < len; i++){
+		i2c_read(i2c_dev, &read_byte, 1, EEPROM_ADDR);
+		if (ret) {
+			LOG_ERR("I2C read failed: %d.",ret);
+			return ret;
+		}
+
+		if (read_byte != ((u8_t*)buf)[i]){
+			LOG_INF("EEPROM verification mismatch. 0x%x has 0x%x, should be 0x%x",addr+i,read_byte,((u8_t*)buf)[i]);
+			return 0;
+		}
+
+		LOG_INF("Byte verified: 0x%x has 0x%x",addr+i,read_byte);
+
+	}
+
+	*verified = true;
+	return 0;
+}
+
+int eeprom_write(u16_t addr, const void *buf, size_t len, bool verify){
+	/* struct i2c_msg msg[2]; */
+	u8_t tx_buffer[34]; /* Separate buffers unusable with Zephyr ATM? */
+	bool verified;
+	int ret;
+
+	u8_t buf_addr[] = {(u8_t)((addr >> 8) & 0xFF), (u8_t)((addr) & 0xFF)};
+	
+	/* Separate buffers unusable with Zephyr ATM? */
+	/*
+	msg[0].buf = buf_addr;
+	msg[0].len = sizeof(buf_addr);
+	msg[0].flags = I2C_MSG_WRITE;
+
+	msg[1].buf = buf;
+	msg[1].len = len;
+	msg[1].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
+
+	ret = i2c_transfer(i2c_dev, msg, 2, EEPROM_ADDR);
+	*/
+
+	memcpy(tx_buffer, buf_addr, 2);
+	memcpy(tx_buffer + 2, buf, len);
+	ret = i2c_write(i2c_dev, tx_buffer, len + 2, EEPROM_ADDR);
+	if (ret) {
+		LOG_ERR("I2C transfer failed: %d.",ret);
+		return ret;
+	}
+
+	k_sleep(6); /* 5 ms is the maximum time to complete a write cycle */
+
+	if (verify == false){
+		return 0;
+	}
+
+	ret = eeprom_verify(addr, buf, len, &verified);
+	if (ret) {
+		LOG_ERR("EEPROM verification failed: %d.",ret);
+		return ret;
+	}
+
+	if (verified == 0){
+		LOG_ERR("EEPROM mismatch on verify after write");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int eeprom_read(u16_t addr, void *buf, size_t len){
+	u8_t buf_addr[] = {(u8_t)((addr >> 8) & 0xFF), (u8_t)((addr) & 0xFF)};
+	return i2c_write_read(i2c_dev, EEPROM_ADDR, buf_addr, sizeof(addr), buf, len);
 }
 
 int eeprom_write_board_id(void){
@@ -1336,15 +1416,69 @@ int eeprom_write_board_id(void){
 		.pca = 20035,
 		.version = 0x01040000,
 	};
+	int ret;
+
 	board_id_make_checksum(&board);
+	
+	ret = eeprom_write(0x07E0, &board, sizeof(board), true);
+	if (ret){
+		LOG_ERR("Writing board ID failed: %d", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
-int eeprom_read_board_id(){
+int eeprom_unprotect(void){
+	u8_t buf = 0x40;
+	int ret;
+	
+	ret = eeprom_write(0x8000, &buf, 1, false);
+	if (ret){
+		LOG_ERR("Unprotect failed: %d", ret);
+		return ret;
+	}
 
+	ret = eeprom_read(0x8000, &buf, 1);
+	if (ret){
+		LOG_ERR("Unprotect verification failed: %d", ret);
+		return ret;
+	}
+
+	
+	if (buf != 0x00){
+		LOG_ERR("Unprotect verification mismatch. Read value: 0x%x",buf);
+		return -EIO;
+	}
+
+	return 0;
 }
 
 int eeprom_protect(void){
+	const u8_t protect_upper_quarter = 0x48;
+	const u8_t protect_upper_quarter_and_lock = 0x69;
+	u8_t config_read;
+	int ret;
+	
+	ret = eeprom_write(0x8000, &protect_upper_quarter, 1, false);
+	if (ret){
+		LOG_ERR("Protect failed: %d", ret);
+		return ret;
+	}
 
+	ret = eeprom_read(0x8000, &config_read, 1);
+	if (ret){
+		LOG_ERR("Protect verification failed: %d", ret);
+		return ret;
+	}
+
+	
+	if (config_read != 0x08){ // 0x09 if locked
+		LOG_ERR("Protect verification mismatch. Read value: 0x%x",config_read);
+		return -EIO;
+	}
+
+	return 0;
 }
 
 void main(void)
@@ -1353,7 +1487,7 @@ void main(void)
 
 	LOG_INF("Asset tracker mod started");
 
-	u8_t wrbuf[] = {0x01,0x2B,0x45,0x67,0x89};
+	u8_t wrbuf[] = {0x12,0x34,0x56,0x78,0x90};
 	u8_t wrbuf2[] = {0x80,0x00};
 	u8_t rdbuf[2];
 
@@ -1362,15 +1496,27 @@ void main(void)
 
 	bool present = eeprom_is_present();
 	LOG_INF("EEPROM Present: %d",present);
-	
-	//ret = i2c_write(i2c_dev,wrbuf,sizeof(wrbuf),0x50);
-	//LOG_INF("Write->%d",ret);
-	k_sleep(50); // actually 5
-	ret = i2c_write_read(i2c_dev,0x50,wrbuf2,sizeof(wrbuf2),rdbuf,sizeof(rdbuf));
 
-	LOG_INF("Read->%d: 0x%x 0x%x",ret,rdbuf[0],rdbuf[1]);
+	ret = eeprom_unprotect();
+	LOG_INF("EEPROM unprotect->%d",ret);
+
+	ret = eeprom_write_board_id();
+	LOG_INF("EEPROM write board ID->%d",ret);
+
+	ret = eeprom_protect();
+	LOG_INF("EEPROM protect->%d",ret);
+
+	ret = eeprom_write(0x7f00,wrbuf,5,true);
+	LOG_INF("EEPROM write illegal->%d",ret);
+
+	//ret = i2c_write(i2c_dev, wrbuf, 4, 0x50);
+	//LOG_INF("EEPROM write board ID->%d",ret);
+
+	ret = eeprom_read(0x0000,rdbuf,2);
+	LOG_INF("EEPROM read board ID->%d: 0x%x. 0x%x",ret,rdbuf[0],rdbuf[1]);
 
 	while(1);
+	/* --- THE NOTHING --- */
 
 	k_work_q_start(&application_work_q, application_stack_area,
 		       K_THREAD_STACK_SIZEOF(application_stack_area),
