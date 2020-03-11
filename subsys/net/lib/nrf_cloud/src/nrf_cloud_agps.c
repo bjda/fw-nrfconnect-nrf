@@ -555,7 +555,12 @@ int nrf_cloud_agps_process(const char *buf, size_t buf_len, const int *socket)
 				element.time_and_tow->sv_mask);
 		} else if (element.type == NRF_CLOUD_AGPS_EPHEMERIDES) {
 			element.ephemeris->toc = element.ephemeris->toe;
+		} else if (element.type == NRF_CLOUD_AGPS_LOCATION) {
+			element.location->unc_semimajor = 65;
+			element.location->unc_semiminor = 65;
+			element.location->confidence = 100;
 		}
+
 
 		err = agps_send_to_modem(&element);
 		if (err) {
