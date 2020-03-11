@@ -1506,13 +1506,16 @@ void main(void)
 	ret = eeprom_protect();
 	LOG_INF("EEPROM protect->%d",ret);
 
-	ret = eeprom_write(0x7f00,wrbuf,5,true);
+	ret = eeprom_write(0x0100,wrbuf,5,true);
+	LOG_INF("EEPROM write legal->%d",ret);
+
+	ret = eeprom_write(0x07f0,wrbuf,5,true);
 	LOG_INF("EEPROM write illegal->%d",ret);
 
 	//ret = i2c_write(i2c_dev, wrbuf, 4, 0x50);
 	//LOG_INF("EEPROM write board ID->%d",ret);
 
-	ret = eeprom_read(0x0000,rdbuf,2);
+	ret = eeprom_read(0x07e0,rdbuf,2);
 	LOG_INF("EEPROM read board ID->%d: 0x%x. 0x%x",ret,rdbuf[0],rdbuf[1]);
 
 	while(1);
