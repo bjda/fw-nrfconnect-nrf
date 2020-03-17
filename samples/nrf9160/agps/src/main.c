@@ -28,6 +28,9 @@
 
 #include <drivers/gps.h>
 
+#include <drivers/gpio.h>
+#include <power/reboot.h>
+
 static struct device *gps_dev;
 static u64_t start_search_timestamp;
 static u64_t fix_timestamp;
@@ -40,6 +43,16 @@ static struct gps_config gps_cfg = {
 	.power_mode = GPS_POWER_MODE_DISABLED,
 	.timeout = 20,
 };
+
+/* IO stuff */
+static u32_t cnt0, cnt1, cnt2;
+static struct device *led_dev;
+static bool button_reboots = 0; /* Used after fix */
+
+ /* FWD declarations */
+static void delete_agps(void);
+static void lte_disable(void);
+static int start_gps(void);
 
 void bsd_recoverable_error_handler(uint32_t error)
 {
@@ -64,6 +77,7 @@ static void print_pvt_data(struct gps_pvt *pvt_data)
 static void process_agps_data(char *buf, size_t len)
 {
 	int err;
+	static int hack_count = 0;
 
 	printk("Starting A-GPS test\n");
 
@@ -72,6 +86,18 @@ static void process_agps_data(char *buf, size_t len)
 		printk("A-GPS failed, error: %d\n", err);
 	} else {
 		printk("A-GPS success\n");
+		hack_count++;
+		if (hack_count == 2){
+			printk("A-GPS real proper success");
+			lte_disable();
+			gpio_pin_write(led_dev, DT_ALIAS_LED2_GPIOS_PIN, 1);
+			int btn_state = 1;
+			while(btn_state == 1){
+				gpio_pin_read(led_dev, DT_ALIAS_SW0_GPIOS_PIN,&btn_state);
+				k_sleep(16);
+			}
+			start_gps();
+		}
 	}
 }
 
@@ -130,6 +156,8 @@ static void cloud_event_handler(const struct cloud_backend *const backend,
 		break;
 	case CLOUD_EVT_READY:
 		printk("CLOUD_EVT_READY\n");
+		delete_agps();
+		nrf_cloud_agps_request_all();
 		break;
 	case CLOUD_EVT_DISCONNECTED:
 		printk("CLOUD_EVT_DISCONNECTED\n");
@@ -191,10 +219,33 @@ connect:
 	lte_lc_nw_reg_status_get(&reg_status);
 
 	while ((reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
-	       (reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING))
+	       (reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING) &&
+	       (reg_status != LTE_LC_NW_REG_UICC_FAIL))
 	{
 		k_sleep(K_SECONDS(2));
 		lte_lc_nw_reg_status_get(&reg_status);
+	}
+
+	if (reg_status == LTE_LC_NW_REG_UICC_FAIL) {
+		printk("UICC fail\n");
+		printk("Going GPS-only and terminating thread\n");
+
+		delete_agps();
+		int err = at_cmd_write("AT+CFUN=20", NULL, 0, NULL);
+		if (err) {
+			printk("Could not disable LTE, error: %d\n", err);
+		}
+
+		gpio_pin_write(led_dev, DT_ALIAS_LED2_GPIOS_PIN, 1);
+
+		int btn_state = 1;
+		while(btn_state == 1){
+				gpio_pin_read(led_dev, DT_ALIAS_SW0_GPIOS_PIN,&btn_state);
+				k_sleep(16);
+		}
+		start_gps();
+
+		return -1;
 	}
 
 	ret = cloud_connect(cloud_backend);
@@ -336,6 +387,8 @@ static void agps_print_off(void)
 
 static int start_gps(void)
 {
+	gpio_pin_write(led_dev, DT_ALIAS_LED2_GPIOS_PIN, 0);
+	gpio_pin_write(led_dev, DT_ALIAS_LED0_GPIOS_PIN, 1);
 	int err = gps_start(gps_dev, &gps_cfg);
 	if (err) {
 		printk("GPS could not be started, error: %d\n", err);
@@ -605,7 +658,14 @@ static void gps_handler(struct device *dev, struct gps_event *evt)
 		printk("GPS_EVT_HAS_TIME_WINDOW\n");
 		break;
 	case GPS_EVT_AGPS_DATA_NEEDED:
-		printk("GPS_EVT_AGPS_DATA_NEEDED\n");
+		printk("GPS_EVT_AGPS_DATA_NEEDED sv_mask_ephe,%u\n", evt->agps_request.sv_mask_ephe);
+		printk("GPS_EVT_AGPS_DATA_NEEDED sv_mask_alm,%u\n", evt->agps_request.sv_mask_alm);
+		printk("GPS_EVT_AGPS_DATA_NEEDED utc,%u\n", evt->agps_request.utc);
+		printk("GPS_EVT_AGPS_DATA_NEEDED klobuchar,%u\n", evt->agps_request.klobuchar);
+		printk("GPS_EVT_AGPS_DATA_NEEDED nequick,%u\n", evt->agps_request.nequick);
+		printk("GPS_EVT_AGPS_DATA_NEEDED system_time_tow,%u\n", evt->agps_request.system_time_tow);
+		printk("GPS_EVT_AGPS_DATA_NEEDED position,%u\n", evt->agps_request.position);
+		printk("GPS_EVT_AGPS_DATA_NEEDED integrity,%u\n", evt->agps_request.integrity);
 		break;
 	case GPS_EVT_PVT:
 		print_satellite_stats(&evt->pvt);
@@ -619,6 +679,16 @@ static void gps_handler(struct device *dev, struct gps_event *evt)
 		print_pvt_data(&evt->pvt);
 		printk("-----------------------------------\n");
 
+		gpio_pin_write(led_dev, DT_ALIAS_LED0_GPIOS_PIN, 0);
+		gpio_pin_write(led_dev, DT_ALIAS_LED1_GPIOS_PIN, 1);
+
+		int btn_state = 1;
+		while(btn_state == 1){
+				gpio_pin_read(led_dev, DT_ALIAS_SW0_GPIOS_PIN,&btn_state);
+				k_sleep(16);
+		}
+		sys_reboot(0);
+
 		stop_gps();
 		break;
 	default:
@@ -630,7 +700,13 @@ void main(void)
 {
 	int err;
 
-	modem_trace_enable();
+	//modem_trace_enable();
+
+	led_dev = device_get_binding(DT_ALIAS_LED0_GPIOS_CONTROLLER);
+	gpio_pin_configure(led_dev, DT_ALIAS_LED0_GPIOS_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(led_dev, DT_ALIAS_LED1_GPIOS_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(led_dev, DT_ALIAS_LED2_GPIOS_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(led_dev, DT_ALIAS_SW0_GPIOS_PIN, GPIO_DIR_IN | GPIO_PUD_PULL_UP);
 
 	printk("Starting A-GPS application\n");
 

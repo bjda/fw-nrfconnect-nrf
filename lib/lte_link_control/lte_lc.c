@@ -136,7 +136,7 @@ static const char cgauth[] = "AT+CGAUTH="CONFIG_LTE_PDN_AUTH;
 #if defined(CONFIG_LTE_LEGACY_PCO_MODE)
 static const char legacy_pco[] = "AT%XEPCO=0";
 #endif
-
+static bool uicc_fail = false;
 void at_handler(void *context, const char *response)
 {
 	ARG_UNUSED(context);
@@ -156,8 +156,12 @@ void at_handler(void *context, const char *response)
 	}
 
 	if ((status == LTE_LC_NW_REG_REGISTERED_HOME) ||
-	    (status == LTE_LC_NW_REG_REGISTERED_ROAMING)) {
+	    (status == LTE_LC_NW_REG_REGISTERED_ROAMING)) { 
 		k_sem_give(&link);
+	}
+	if (status == LTE_LC_NW_REG_UICC_FAIL) {
+		uicc_fail = true;
+		k_sem_give(&link); /* Well, not technically */
 	}
 }
 
@@ -256,6 +260,7 @@ static int w_lte_lc_connect(void)
 		}
 
 		err = k_sem_take(&link, K_SECONDS(CONFIG_LTE_NETWORK_TIMEOUT));
+
 		if (err == -EAGAIN) {
 			LOG_INF("Network connection attempt timed out");
 
@@ -274,6 +279,12 @@ static int w_lte_lc_connect(void)
 				err = -ETIMEDOUT;
 			}
 		}
+
+		if (uicc_fail) {
+			LOG_INF("No SIM, everything is fine");
+			goto exit;
+		}
+
 	} while (retry);
 
 exit:
