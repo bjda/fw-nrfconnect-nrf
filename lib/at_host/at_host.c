@@ -300,6 +300,7 @@ static int at_host_init(struct device *arg)
 	k_work_q_start(&at_host_work_q, at_host_stack_area,
 		       K_THREAD_STACK_SIZEOF(at_host_stack_area),
 		       CONFIG_AT_HOST_THREAD_PRIO);
+	k_thread_name_set(&at_host_work_q.thread, "at_host_work_q");
 	uart_irq_rx_enable(uart_dev);
 
 	return err;
