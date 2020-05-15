@@ -32,6 +32,9 @@ enum at_cmd_state {
 	AT_CMD_ERROR,
 	AT_CMD_ERROR_CMS,
 	AT_CMD_ERROR_CME,
+	AT_CMD_ERROR_QUEUE, /* Error enqueueing message */
+	AT_CMD_ERROR_WRITE, /* Error during socket write */
+	AT_CMD_ERROR_READ, /* Error during socket read */
 	AT_CMD_NOTIFICATION,
 };
 
@@ -67,11 +70,6 @@ int at_cmd_init(void);
  *                NULL pointer is allowed, which means that any returned data
  *                will not processed other than the return code (OK, ERROR, CMS
  *                or CME).
- * @param state   Pointer to @ref enum at_cmd_state variable that can hold
- *                the error state returned by the modem. If the return state
- *                is a CMS or CME errors will the error code be returned in the
- *                the function return code as a positive value. NULL pointer is
- *                allowed.
  *
  * @retval 0 If command execution was successful (same as OK returned from
  *           modem). Error codes returned from the driver or by the socket are
@@ -86,8 +84,7 @@ int at_cmd_init(void);
  * @retval -EIO is returned if the function failed to send the command.
  */
 int at_cmd_write_with_callback(const char *const cmd,
-					  at_cmd_handler_t  handler,
-					  enum at_cmd_state *state);
+					  at_cmd_handler_t  handler);
 
 /**
  * @brief Function to send an AT command and receive response immediately
