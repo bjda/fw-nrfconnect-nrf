@@ -43,6 +43,12 @@ struct resp_item  {
 	enum at_cmd_state state;	/* State of AT command */
 };
 
+/* Metadata for an unsolicited response ("notification") */
+struct notif_item {
+	struct k_work work;		/* Associated work item */
+	char *buf;			/* Pointer to response buffer */
+};
+
 static K_THREAD_STACK_DEFINE(socket_thread_stack,
 			     CONFIG_AT_CMD_THREAD_STACK_SIZE);
 
@@ -61,6 +67,10 @@ K_MSGQ_DEFINE(commands, sizeof(struct cmd_item), CONFIG_AT_CMD_QUEUE_LEN, 4);
 /* Message queue to return the result in the case of a synchronous call */
 K_MSGQ_DEFINE(response_sync, sizeof(struct resp_item), 1, 4);
 K_MUTEX_DEFINE(response_sync_get);
+
+/* Memory area for unsolicited notification metadata */
+K_MEM_SLAB_DEFINE(notifs, sizeof(struct notif_item), CONFIG_AT_CMD_NOTIF_Q_LEN,
+									     4);
 
 static int open_socket(void)
 {
@@ -190,6 +200,49 @@ static void load_cmd_and_write(void)
 	k_mutex_unlock(&current_cmd_mutex);
 }
 
+static void handle_notification(struct k_work *item)
+{
+	struct notif_item *notif;
+
+	notif = CONTAINER_OF(item, struct notif_item, work);
+	if (notif->buf == NULL || notification_handler == NULL) {
+		goto handle_notification_out_free;
+	}
+
+	notification_handler(notif->buf);
+
+handle_notification_out_free:
+	k_free(notif->buf);
+	k_mem_slab_free(&notifs, (void **)&notif);
+}
+
+static int dispatch_notification(char *buf)
+{
+	struct notif_item *notif;
+	int ret;
+
+	if (buf == NULL || notification_handler == NULL) {
+		return -EINVAL;
+	}
+
+	ret = k_mem_slab_alloc(&notifs, (void **)&notif, K_FOREVER);
+	if (ret) {
+		LOG_ERR("Could not allocate notif metadata slot");
+		return -ENOMEM;
+	}
+
+	notif->buf = k_malloc(strlen(buf) + 1);
+	if (notif->buf == NULL) {
+		k_mem_slab_free(&notifs, (void **)&notif);
+		return -ENOMEM;
+	}
+
+	strcpy(notif->buf, buf);
+	k_work_init(&notif->work, handle_notification);
+	k_work_submit(&notif->work);
+	return 0;
+}
+
 static void socket_thread_fn(void *arg1, void *arg2, void *arg3)
 {
 	static int bytes_read;
@@ -263,7 +316,7 @@ static void socket_thread_fn(void *arg1, void *arg2, void *arg3)
 		/* Call the relevant callback, if any */
 		if (ret.state == AT_CMD_NOTIFICATION &&
 		    notification_handler != NULL) {
-			notification_handler(buf);
+			dispatch_notification(buf);
 		} else if (current_cmd.callback != NULL) {
 			current_cmd.callback(buf);
 		}
