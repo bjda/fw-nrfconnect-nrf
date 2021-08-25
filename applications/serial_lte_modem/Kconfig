@@ -52,7 +52,7 @@ endchoice
 if SLM_NATIVE_TLS_PS
 config SLM_NATIVE_TLS_PS_WRITE_ONCE
 	bool "Write-once credentials"
-	default y
+	default n
 	help
 		Credentials are written with the "write-once" attribute, meaning
 		that they cannot be modified, replaced or deleted by firmware.
