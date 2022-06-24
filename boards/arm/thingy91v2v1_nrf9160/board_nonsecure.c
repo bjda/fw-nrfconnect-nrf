@@ -74,11 +74,13 @@ static int thingy91_board_init(const struct device *dev)
 {
 	int err;
 
-	err = thingy91_magpio_configure();
-	if (err) {
-		LOG_ERR("thingy91_magpio_configure failed with error: %d", err);
-		return err;
-	}
+	/* Skip config for prototypes
+	 * err = thingy91_magpio_configure();
+	 * if (err) {
+	 * 	LOG_ERR("thingy91_magpio_configure failed with error: %d", err);
+	 * 	return err;
+	 * }
+	 */
 
 	return 0;
 }
