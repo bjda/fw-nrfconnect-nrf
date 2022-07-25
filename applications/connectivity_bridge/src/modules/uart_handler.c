@@ -21,7 +21,7 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_BRIDGE_UART_LOG_LEVEL);
 
 static const struct device *devices[] = {
 	DEVICE_DT_GET(DT_NODELABEL(uart0)),
-	DEVICE_DT_GET(DT_NODELABEL(uart1)),
+	//DEVICE_DT_GET(DT_NODELABEL(uart1)),
 };
 
 #define UART_DEVICE_COUNT ARRAY_SIZE(devices)
@@ -133,6 +133,7 @@ static void uart_callback(const struct device *dev, struct uart_event *evt,
 
 	switch (evt->type) {
 	case UART_RX_RDY:
+		LOG_INF("UART_%d UART_RX_RDY", dev_idx);
 		uart_rx_buf_ref(evt->data.rx.buf);
 
 		event = new_uart_data_event();
@@ -142,11 +143,13 @@ static void uart_callback(const struct device *dev, struct uart_event *evt,
 		APP_EVENT_SUBMIT(event);
 		break;
 	case UART_RX_BUF_RELEASED:
+		LOG_INF("UART_%d RX_BUF_RELEASED", dev_idx);
 		if (evt->data.rx_buf.buf) {
 			uart_rx_buf_unref(evt->data.rx_buf.buf);
 		}
 		break;
 	case UART_RX_BUF_REQUEST:
+		LOG_INF("UART_%d RX_BUF_REQUEST", dev_idx);
 		buf = uart_rx_buf_alloc();
 		if (buf == NULL) {
 			LOG_WRN("UART_%d RX overflow", dev_idx);
@@ -160,6 +163,7 @@ static void uart_callback(const struct device *dev, struct uart_event *evt,
 		}
 		break;
 	case UART_RX_DISABLED:
+		LOG_INF("UART_%d RX_DISABLED", dev_idx);
 		if (enable_rx_retry[dev_idx]) {
 			enable_uart_rx(dev_idx);
 			enable_rx_retry[dev_idx] = false;
@@ -168,6 +172,7 @@ static void uart_callback(const struct device *dev, struct uart_event *evt,
 		}
 		break;
 	case UART_TX_DONE:
+		LOG_INF("UART_%d UART_TX_DONE", dev_idx);
 		uart_tx_finish(dev_idx, evt->data.tx.len);
 
 		if (ring_buf_is_empty(&uart_tx_ringbufs[dev_idx].rb)) {
@@ -177,6 +182,7 @@ static void uart_callback(const struct device *dev, struct uart_event *evt,
 		}
 		break;
 	case UART_TX_ABORTED:
+		LOG_INF("UART_%d UART_TX_ABORTED", dev_idx);
 		uart_tx_finish(dev_idx, evt->data.tx.len);
 		atomic_set(&uart_tx_started[dev_idx], false);
 		break;

@@ -56,7 +56,7 @@ static bool app_event_handler(const struct app_event_header *aeh)
 	}
 
 	if (is_power_down_event(aeh)) {
-		pm_power_state_set((struct pm_state_info) {.state = PM_STATE_SOFT_OFF});
+		pm_state_set(PM_STATE_SOFT_OFF, 0);
 	}
 
 	/* If event is unhandled, unsubscribe. */

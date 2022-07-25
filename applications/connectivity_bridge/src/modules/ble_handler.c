@@ -133,28 +133,31 @@ static void bt_send_work_handler(struct k_work *work)
 	int err;
 	bool notif_disabled = false;
 
-	do {
-		len = ring_buf_get_claim(&ble_tx_ring_buf, &buf, nus_max_send_len);
+	LOG_INF("bt_send_work_handler in @ %p",bt_send_work_handler);
 
-		err = bt_nus_send(current_conn, buf, len);
-		if (err == -EINVAL) {
-			notif_disabled = true;
-			len = 0;
-		} else if (err) {
-			len = 0;
-		}
-
-		err = ring_buf_get_finish(&ble_tx_ring_buf, len);
-		if (err) {
-			LOG_ERR("ring_buf_get_finish: %d", err);
-			break;
-		}
-	} while (len != 0 && !ring_buf_is_empty(&ble_tx_ring_buf));
-
-	if (notif_disabled) {
-		/* Peer has not enabled notifications: don't accumulate data */
-		ring_buf_reset(&ble_tx_ring_buf);
-	}
+		do {
+			len = ring_buf_get_claim(&ble_tx_ring_buf, &buf, nus_max_send_len); // LOG_ERR("139");
+ // LOG_ERR("140");
+			err = bt_nus_send(current_conn, buf, len); // LOG_ERR("141");
+			if (err == -EINVAL) { // LOG_ERR("142");
+				notif_disabled = true; // LOG_ERR("143");
+				len = 0; // LOG_ERR("144");
+			} else if (err) { // LOG_ERR("145");
+				len = 0; // LOG_ERR("146");
+			} // LOG_ERR("147");
+ // LOG_ERR("148");
+			err = ring_buf_get_finish(&ble_tx_ring_buf, len); // LOG_ERR("149");
+			if (err) { // LOG_ERR("150");
+				LOG_ERR("ring_buf_get_finish: %d", err); // LOG_ERR("151");
+				break; // LOG_ERR("152");
+			} // LOG_ERR("153");
+		} while (len != 0 && !ring_buf_is_empty(&ble_tx_ring_buf)); // LOG_ERR("154");
+ // LOG_ERR("155");
+		if (notif_disabled) { // LOG_ERR("156");
+			/* Peer has not enabled notifications: don't accumulate data */ // LOG_ERR("157");
+			ring_buf_reset(&ble_tx_ring_buf); // LOG_ERR("158");
+		} // LOG_ERR("159");
+	LOG_INF("bt_send_work_handler out"); // LOG_ERR("160");
 }
 
 static void bt_receive_cb(struct bt_conn *conn, const uint8_t *const data,
@@ -285,6 +288,7 @@ static void bt_ready(int err)
 static bool app_event_handler(const struct app_event_header *aeh)
 {
 	if (is_uart_data_event(aeh)) {
+		LOG_INF("handling uart_data_event");
 		const struct uart_data_event *event =
 			cast_uart_data_event(aeh);
 
@@ -314,7 +318,7 @@ static bool app_event_handler(const struct app_event_header *aeh)
 		if (buf_utilization == written) {
 			k_work_submit(&bt_send_work);
 		}
-
+		//LOG_INF("handled uart_data_event");
 		return false;
 	}
 

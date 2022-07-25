@@ -90,10 +90,12 @@ int bt_nus_send(struct bt_conn *conn, const uint8_t *data, uint16_t len)
 	params.func = on_sent;
 
 	if (!conn) {
-		LOG_DBG("Notification send to all connected peers");
+		LOG_WRN("Notification send to all connected peers");
 		return bt_gatt_notify_cb(NULL, &params);
 	} else if (bt_gatt_is_subscribed(conn, attr, BT_GATT_CCC_NOTIFY)) {
+		LOG_WRN("Notifying");
 		return bt_gatt_notify_cb(conn, &params);
+
 	} else {
 		return -EINVAL;
 	}

@@ -218,8 +218,8 @@ void _event_submit(struct app_event_header *aeh)
 	}
 	sys_slist_append(&eventq, &aeh->node);
 	k_spin_unlock(&lock, key);
-
 	k_work_submit(&event_processor);
+	LOG_INF("event sumbitted:%s",log_strdup(aeh->type_id->name));
 }
 
 int app_event_manager_init(void)
