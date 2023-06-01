@@ -111,6 +111,17 @@
 		compatible = "nordic,npm1300";
 		label = "nPM1300";
 		reg = <0x6b>;
+		npm1300_ek_charger: charger {
+			compatible = "nordic,npm1300-charger";
+			/* Dummy values. Correct values are set and charging is enabled in npm1300_init.c */
+			term-microvolt = <4200000>;
+			term-warm-microvolt = <4000000>;
+			current-microamp = <800000>;
+			dischg-limit-microamp = <1000000>;
+			vbus-limit-microamp = <500000>;
+			thermistor-ohms = <10000>;
+			thermistor-beta = <3380>;
+		};
 	};
 	pmic_wifi: npm6001@70 {
 		compatible = "nordic,npm6001-regulator";
