@@ -73,7 +73,7 @@ config SECURE_BOOT
 # to set up your own keys.
 
 config SB_SIGNING_KEY_FILE
-	default "$(ZEPHYR_NRF_MODULE_DIR)/boards/arm/thingy91v2_nrf9160/nsib_signing_key.pem"
+	default "$(ZEPHYR_NRF_MODULE_DIR)/boards/arm/thingy91v2_nrf9161/nsib_signing_key.pem"
 
 config I2C
 	default y
