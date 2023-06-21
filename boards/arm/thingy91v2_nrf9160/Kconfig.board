@@ -1,4 +1,4 @@
-# Thingy:91 nRF9160 board configuration
+# Thingy:91 nRF9161 board configuration
 #
 # Copyright (c) 2019 Nordic Semiconductor ASA
 #
@@ -7,9 +7,9 @@
 if SOC_NRF9161_SICA
 
 config BOARD_THINGY91V2_NRF9161
-	bool "nRF9160 THINGY91V2"
+	bool "nRF9161 THINGY91V2"
 
 config BOARD_THINGY91V2_NRF9161_NS
-	bool "nRF9160 THINGY91V2 non-secure"
+	bool "nRF9161 THINGY91V2 non-secure"
 
 endif # SOC_NRF9161_SICA

@@ -6,7 +6,7 @@
 #include "thingy91v2_nrf9160_common-pinctrl.dtsi"
 
 / {
-	model = "Nordic Thingy91 nRF9160";
+	model = "Nordic Thingy91 nRF9161";
 	compatible = "nordic,thingy91-nrf9160";
 
 	chosen {

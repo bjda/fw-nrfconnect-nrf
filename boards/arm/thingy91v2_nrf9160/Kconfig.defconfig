@@ -1,4 +1,4 @@
-# Thingy:91 nRF9160 board configuration
+# Thingy:91 nRF9161 board configuration
 #
 # Copyright (c) 2018 Nordic Semiconductor ASA
 #
@@ -11,7 +11,7 @@ config NRF7002_ON_SPI
 	def_bool $(dt_compat_enabled,$(DT_COMPAT_NORDIC_NRF700X_SPI))
 
 config BOARD
-	default "thingy91v2_nrf9160"
+	default "thingy91v2_nrf9161"
 
 # By default, if we build for a Non-Secure version of the board,
 # enable building with TF-M as the Secure Execution Environment.
