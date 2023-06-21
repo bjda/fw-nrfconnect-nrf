@@ -5,7 +5,7 @@
  */
 
 /dts-v1/;
-#include <nordic/nrf9160ns_sica.dtsi>
+#include <nordic/nrf9161ns_sica.dtsi>
 #include "thingy91v2_nrf9160_common.dts"
 
 / {
