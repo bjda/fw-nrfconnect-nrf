@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "thingy91v2_nrf5340_cpuapp_common-pinctrl.dtsi"
+#include "thingy91x_nrf5340_cpuapp_common-pinctrl.dtsi"
 
 / {
 
