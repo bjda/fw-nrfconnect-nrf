@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 
-if BOARD_THINGY91V2_NRF9161 || BOARD_THINGY91V2_NRF9161_NS
+if BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS
 
 config BOARD_INIT_PRIORITY
 	int "Initialization priority for board configuration"
@@ -15,7 +15,7 @@ config BOARD_INIT_PRIORITY
 	  and the PMIC setup must happen before the sensors are initialized in order
 	  to power them up in time.
 
-endif # BOARD_THINGY91V2_NRF9161 || BOARD_THINGY91V2_NRF9161_NS
+endif # BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS
 
 module=BOARD
 module-dep=LOG

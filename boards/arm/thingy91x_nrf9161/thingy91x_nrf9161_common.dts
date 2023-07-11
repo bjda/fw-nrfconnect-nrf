@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
-#include "thingy91v2_nrf9161_common-pinctrl.dtsi"
+#include "thingy91x_nrf9161_common-pinctrl.dtsi"
 
 / {
 	model = "Nordic Thingy91 nRF9161";
@@ -246,4 +246,4 @@
 };
 
 /* Include partition configuration file */
-#include "thingy91v2_nrf9161_partition_conf.dts"
+#include "thingy91x_nrf9161_partition_conf.dts"

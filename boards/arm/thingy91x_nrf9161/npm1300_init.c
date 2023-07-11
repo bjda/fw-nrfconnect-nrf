@@ -140,7 +140,7 @@ static int power_mgmt_init(void)
 	return err;
 }
 
-static int thingy91v2_board_init(void)
+static int thingy91x_board_init(void)
 {
 	int err;
 
@@ -153,4 +153,4 @@ static int thingy91v2_board_init(void)
 	return 0;
 }
 
-SYS_INIT(thingy91v2_board_init, POST_KERNEL, CONFIG_BOARD_INIT_PRIORITY);
+SYS_INIT(thingy91x_board_init, POST_KERNEL, CONFIG_BOARD_INIT_PRIORITY);

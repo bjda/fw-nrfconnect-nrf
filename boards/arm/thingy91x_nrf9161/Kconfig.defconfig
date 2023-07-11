@@ -4,19 +4,19 @@
 #
 # SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 
-if BOARD_THINGY91V2_NRF9161 || BOARD_THINGY91V2_NRF9161_NS
+if BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS
 
 DT_COMPAT_NORDIC_NRF700X_SPI := nordic,nrf700x-spi
 config NRF7002_ON_SPI
 	def_bool $(dt_compat_enabled,$(DT_COMPAT_NORDIC_NRF700X_SPI))
 
 config BOARD
-	default "thingy91v2_nrf9161"
+	default "thingy91x_nrf9161"
 
 # By default, if we build for a Non-Secure version of the board,
 # enable building with TF-M as the Secure Execution Environment.
 config BUILD_WITH_TFM
-	default y if BOARD_THINGY91V2_NRF9161_NS
+	default y if BOARD_THINGY91X_NRF9161_NS
 
 if BUILD_WITH_TFM
 
@@ -38,14 +38,14 @@ endif # BUILD_WITH_TFM
 # Apply this configuration below by setting the Kconfig symbols used by
 # the linker according to the information extracted from DT partitions.
 
-if BOARD_THINGY91V2_NRF9161 && TRUSTED_EXECUTION_SECURE
+if BOARD_THINGY91X_NRF9161 && TRUSTED_EXECUTION_SECURE
 
 config FLASH_LOAD_SIZE
 	default $(dt_chosen_reg_size_hex,$(DT_CHOSEN_Z_CODE_PARTITION))
 
-endif # BOARD_THINGY91V2_NRF9161 && TRUSTED_EXECUTION_SECURE
+endif # BOARD_THINGY91X_NRF9161 && TRUSTED_EXECUTION_SECURE
 
-if BOARD_THINGY91V2_NRF9161_NS
+if BOARD_THINGY91X_NRF9161_NS
 
 config FLASH_LOAD_OFFSET
 	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_Z_CODE_PARTITION))
@@ -53,7 +53,7 @@ config FLASH_LOAD_OFFSET
 config FLASH_LOAD_SIZE
 	default $(dt_chosen_reg_size_hex,$(DT_CHOSEN_Z_CODE_PARTITION))
 
-endif # BOARD_THINGY91V2_NRF9161_NS
+endif # BOARD_THINGY91X_NRF9161_NS
 
 config BT_HCI_VS
 	default y if BT
@@ -73,7 +73,7 @@ config SECURE_BOOT
 # to set up your own keys.
 
 config SB_SIGNING_KEY_FILE
-	default "$(ZEPHYR_NRF_MODULE_DIR)/boards/arm/thingy91v2_nrf9161/nsib_signing_key.pem"
+	default "$(ZEPHYR_NRF_MODULE_DIR)/boards/arm/thingy91x_nrf9161/nsib_signing_key.pem"
 
 config I2C
 	default y
@@ -98,4 +98,4 @@ config MODEM_ANTENNA_AT_MIPIRFFECTRL_PWROFF
 endif # MODEM_ANTENNA
 
 endif # (!IS_SECURE_BOOTLOADER && !MCUBOOT)
-endif # BOARD_THINGY91V2_NRF9161 || BOARD_THINGY91V2_NRF9161_NS
+endif # BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS
