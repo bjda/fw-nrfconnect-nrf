@@ -10,7 +10,7 @@
 
 #include <soc.h>
 
-LOG_MODULE_REGISTER(thingy91v2_nrf5340_cpunet, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(thingy91x_nrf5340_cpunet, CONFIG_LOG_DEFAULT_LEVEL);
 
 uint32_t *app_ready = (uint32_t *)0x20070000;
 uint32_t *net_ready = (uint32_t *)0x20070024;
