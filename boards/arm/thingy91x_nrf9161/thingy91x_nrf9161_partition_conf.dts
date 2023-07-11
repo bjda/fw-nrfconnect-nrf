@@ -5,7 +5,7 @@
  */
 
 /*
- * Default Flash planning for thingy91v2_nrf9161.
+ * Default Flash planning for thingy91x_nrf9161.
  *
  * Zephyr build for nRF9161 with ARM TrustZone-M support,
  * implies building Secure and Non-Secure Zephyr images.
