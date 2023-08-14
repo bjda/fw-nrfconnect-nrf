@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include "thingy91x_nrf9161_common-pinctrl.dtsi"
+#include <dt-bindings/regulator/npm6001.h>
 
 / {
 	model = "Nordic Thingy91 nRF9161";
@@ -113,9 +114,19 @@
 		reg = <0x6b>;
 	};
 	pmic_wifi: npm6001@70 {
-		compatible = "nordic,npm6001-regulator";
+		compatible = "nordic,npm6001";
 		label = "nPM6001";
 		reg = <0x70>;
+
+		regulators {
+			compatible = "nordic,npm6001-regulator";
+			/* Dedicated regulator for nRF700x */
+			regulator_wifi: BUCK3 {
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-initial-mode = <NPM6001_MODE_PWM>;
+			};
+		};
 	};
 };
 

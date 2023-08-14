@@ -6,16 +6,16 @@
 
 if(CONFIG_BOARD_THINGY91X_NRF9161 AND NOT DEFINED CONFIG_MCUBOOT AND NOT DEFINED CONFIG_IS_SECURE_BOOTLOADER)
 	zephyr_library()
-	zephyr_library_sources(npm1300_init.c)
+	zephyr_library_sources(pmic_init.c)
 endif()
 
 if(CONFIG_BOARD_THINGY91X_NRF9161_NS)
-	# If TF-M is used, the ADP5360 configuration must be done in non-secure
+	# If TF-M is used, the PMIC configuration must be done in non-secure
 	# as we can't instruct TF-M to run it.
-	# If SPM is used instead, it will run the ADP5360 configuration in secure.
+	# If SPM is used instead, it will run the PMIC configuration in secure.
 	if(CONFIG_BUILD_WITH_TFM)
 		zephyr_library()
-		zephyr_library_sources(npm1300_init.c)
+		zephyr_library_sources(pmic_init.c)
 	endif()
 
 	# Use static partition layout to ensure the partition layout remains

@@ -9,6 +9,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/regulator.h>
 
 LOG_MODULE_REGISTER(board_secure, CONFIG_BOARD_LOG_LEVEL);
 
@@ -44,7 +45,7 @@ static int pmic_read_reg(uint16_t address, uint8_t *value)
 	return i2c_read_dt(&pmic, value, 1);
 }
 
-static int power_mgmt_init(void)
+static int npm1300_init(void)
 {
 	int err = 0;
 	uint8_t reg = 0;
@@ -107,50 +108,30 @@ static int power_mgmt_init(void)
 	}
 
 #if defined(CONFIG_WIFI)
-	const struct i2c_dt_spec pmic_wifi = I2C_DT_SPEC_GET(DT_NODELABEL(pmic_wifi));
-
-	// turn on wifi pmic
+	// turn on WiFi PMIC and give it time to start
 	err = pmic_write_reg(0x0800, 0x01); CHECKERR;
-	// try to write to WIFI PMIC
-	// set OVERRIDEPWRUPBUCK to disable BUCK1,2
-	while (i2c_reg_write_byte_dt(&pmic_wifi, 0xAB, 0b00000110)) {
-	}
-
-	LOG_INF("WiFi PMIC is ready");
-
-	/* always select BUCK3 DAC (does not increase power consumption) */
-	err = i2c_reg_write_byte_dt(&pmic_wifi, 0x44, 1U); CHECKERR;
-	// set BUCK3VOUT to SET3V3
-	err = i2c_reg_write_byte_dt(&pmic_wifi, 0x45, 112); CHECKERR;
-	// nRF7002 needs more than 10mA peak, need to set PWM mode
-	// set BUCK3CONFPWMMODE to SETFORCEPWM, PADBUCKMODE2
-	err = i2c_reg_write_byte_dt(&pmic_wifi, 0x4D, 0b00001100); CHECKERR;
-	// set BUCKMODEPADCONF to CMOS, pulldown_enabled
-	err = i2c_reg_write_byte_dt(&pmic_wifi, 0x4E, 0b00111111); CHECKERR;
-	// trigger TASKS_START_BUCK3
-	err = i2c_reg_write_byte_dt(&pmic_wifi, 0x02, 1); CHECKERR;
-	// give BUCK3 time to start up
-	k_sleep(K_USEC(200));
+	k_sleep(K_MSEC(5));
 #else
 	// turn off wifi pmic
 	err = pmic_write_reg(0x0801, 0x01); CHECKERR;
 #endif /* defined(CONFIG_WIFI) */
 
-	LOG_INF("PMIC configuration complete!");
-	return err;
-}
-
-static int thingy91x_board_init(void)
-{
-	int err;
-
-	err = power_mgmt_init();
-	if (err) {
-		LOG_ERR("power_mgmt_init failed with error: %d", err);
-		return err;
-	}
-
+	LOG_INF("nPM1300 setup complete");
 	return 0;
 }
 
-SYS_INIT(thingy91x_board_init, POST_KERNEL, CONFIG_BOARD_INIT_PRIORITY);
+static int npm6001_init(void)
+{
+	int err = 0;
+
+#if defined(CONFIG_WIFI)
+	//err = regulator_enable(DEVICE_DT_GET(DT_NODELABEL(regulator_wifi)));
+	// give BUCK3 time to start up
+	k_sleep(K_USEC(300));
+	LOG_INF("nPM6001 setup complete");
+#endif /* defined(CONFIG_WIFI) */
+	return err;
+}
+
+SYS_INIT(npm1300_init, POST_KERNEL, CONFIG_NPM1300_INIT_PRIORITY);
+SYS_INIT(npm6001_init, POST_KERNEL, CONFIG_NPM6001_INIT_PRIORITY);
