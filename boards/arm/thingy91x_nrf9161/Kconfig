@@ -7,17 +7,17 @@
 if BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS
 
 config NPM1300_INIT_PRIORITY
-	int "Initialization priority for nPM1300"
+	int "Priority for nPM1300 board specific initialization"
 	default 70
 	help
-	  Needs to be after I2C_INIT_PRIORITY, but before REGULATOR_NPM6001_COMMON_INIT_PRIORITY, 
-	  NPM6001_INIT_PRIORITY and SENSOR_INIT_PRIORITY
+	  Needs to be after I2C_INIT_PRIORITY and REGULATOR_NPM1300_INIT_PRIORITY, but before
+	  REGULATOR_NPM6001_COMMON_INIT_PRIORITY and SENSOR_INIT_PRIORITY
 
 config NPM6001_INIT_PRIORITY
-	int "Initialization priority for nPM6001"
+	int "Priority for nPM6001 board specific initialization"
 	default 78
 	help
-	  Needs to be after REGULATOR_NPM6001_COMMON_INIT_PRIORITY, but before WIFI_INIT_PRIORITY
+	  Needs to be after REGULATOR_NPM6001_INIT_PRIORITY, but before WIFI_INIT_PRIORITY
 
 
 endif # BOARD_THINGY91X_NRF9161 || BOARD_THINGY91X_NRF9161_NS

@@ -68,11 +68,11 @@ static int npm1300_init(void)
 	err = pmic_write_reg(0x0601, 0x08); CHECKERR;
 
 	// enable VDD_SENS: 
-	err = pmic_write_reg(0x0802, 0x01); CHECKERR;
+	// err = pmic_write_reg(0x0802, 0x01); CHECKERR;
 
 	// let BUCK2 be controlled by GPIO2
-	err = pmic_write_reg(0x0602, 0x00); CHECKERR;
-	err = pmic_write_reg(0x040C, 0x18); CHECKERR;
+	// err = pmic_write_reg(0x0602, 0x00); CHECKERR;
+	// err = pmic_write_reg(0x040C, 0x18); CHECKERR;
 
 	// set bias resistor for 10k NTC 
 	err = pmic_write_reg(0x050A, 0x01); CHECKERR;
