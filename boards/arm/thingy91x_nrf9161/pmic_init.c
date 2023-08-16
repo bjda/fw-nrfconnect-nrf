@@ -65,7 +65,7 @@ static int npm1300_init(void)
 
 	
 	// set RF switch to BLE by default
-	err = pmic_write_reg(0x0601, 0x08); CHECKERR;
+	// err = pmic_write_reg(0x0601, 0x08); CHECKERR;
 
 	// enable VDD_SENS: 
 	// err = pmic_write_reg(0x0802, 0x01); CHECKERR;
@@ -109,7 +109,7 @@ static int npm1300_init(void)
 
 #if defined(CONFIG_WIFI)
 	// turn on WiFi PMIC and give it time to start
-	err = pmic_write_reg(0x0800, 0x01); CHECKERR;
+	// err = pmic_write_reg(0x0800, 0x01); CHECKERR;
 	k_sleep(K_MSEC(5));
 #else
 	// turn off wifi pmic
