@@ -55,8 +55,10 @@ static int npm1300_init(void)
 		return -ENODEV;
 	}
 
+	
 	// disable charger for config
-	err = pmic_write_reg(0x0305, 0x03); CHECKERR;
+	// err = pmic_write_reg(0x0305, 0x03); CHECKERR;
+
 
 	// set VBUS current limit 500mA 
 	err = pmic_write_reg(0x0201, 0x00); CHECKERR;
@@ -74,64 +76,52 @@ static int npm1300_init(void)
 	// err = pmic_write_reg(0x0602, 0x00); CHECKERR;
 	// err = pmic_write_reg(0x040C, 0x18); CHECKERR;
 
-	// set bias resistor for 10k NTC 
-	err = pmic_write_reg(0x050A, 0x01); CHECKERR;
-	// set COLD threshold to 0C
-	err = pmic_write_reg(0x0310, 0xbb); CHECKERR;
-	err = pmic_write_reg(0x0311, 0x01); CHECKERR;
-	// set COOL threshold to 10C
-	err = pmic_write_reg(0x0312, 0xa4); CHECKERR;
-	err = pmic_write_reg(0x0313, 0x02); CHECKERR;
-	// set WARM threshold to 45C
-	err = pmic_write_reg(0x0314, 0x54); CHECKERR;
-	err = pmic_write_reg(0x0315, 0x01); CHECKERR;
-	// set HOT threshold to 45C
-	err = pmic_write_reg(0x0316, 0x54); CHECKERR;
-	err = pmic_write_reg(0x0317, 0x01); CHECKERR;
+	
+	//// set bias resistor for 10k NTC 
+	//err = pmic_write_reg(0x050A, 0x01); CHECKERR;
+	//// set COLD threshold to 0C
+	//err = pmic_write_reg(0x0310, 0xbb); CHECKERR;
+	//err = pmic_write_reg(0x0311, 0x01); CHECKERR;
+	//// set COOL threshold to 10C
+	//err = pmic_write_reg(0x0312, 0xa4); CHECKERR;
+	//err = pmic_write_reg(0x0313, 0x02); CHECKERR;
+	//// set WARM threshold to 45C
+	//err = pmic_write_reg(0x0314, 0x54); CHECKERR;
+	//err = pmic_write_reg(0x0315, 0x01); CHECKERR;
+	//// set HOT threshold to 45C
+	//err = pmic_write_reg(0x0316, 0x54); CHECKERR;
+	//err = pmic_write_reg(0x0317, 0x01); CHECKERR;
+    //
+	//// set charging current to 800mA
+	//err = pmic_write_reg(0x0308, 0xc8); CHECKERR;
+	//err = pmic_write_reg(0x0309, 0x00); CHECKERR;
+	//// set charging termination voltage 4.2V 
+	//err = pmic_write_reg(0x030C, 0x08); CHECKERR;
+	//// enable charger 
+	//err = pmic_write_reg(0x0304, 0x03); CHECKERR;
+	
 
-	// set charging current to 800mA
-	err = pmic_write_reg(0x0308, 0xc8); CHECKERR;
-	err = pmic_write_reg(0x0309, 0x00); CHECKERR;
-	// set charging termination voltage 4.2V 
-	err = pmic_write_reg(0x030C, 0x08); CHECKERR;
-	// enable charger 
-	err = pmic_write_reg(0x0304, 0x03); CHECKERR;
+	//err = pmic_read_reg(0x0410, &reg); CHECKERR;
+	//if (reg != 0x8) {
+	//	LOG_ERR("unexpected BUCK1 setting: %02X", reg);
+	//}
 
-	err = pmic_read_reg(0x0410, &reg); CHECKERR;
-	if (reg != 0x8) {
-		LOG_ERR("unexpected BUCK1 setting: %02X", reg);
-	}
-
-	err = pmic_read_reg(0x0411, &reg); CHECKERR;
-	if (reg != 0x17) {
-		LOG_ERR("unexpected BUCK2 setting: %02X", reg);
-	}
+	//err = pmic_read_reg(0x0411, &reg); CHECKERR;
+	//if (reg != 0x17) {
+	//	LOG_ERR("unexpected BUCK2 setting: %02X", reg);
+	//}
 
 #if defined(CONFIG_WIFI)
 	// turn on WiFi PMIC and give it time to start
 	// err = pmic_write_reg(0x0800, 0x01); CHECKERR;
 	k_sleep(K_MSEC(5));
-#else
+// #else
 	// turn off wifi pmic
-	err = pmic_write_reg(0x0801, 0x01); CHECKERR;
+	// err = pmic_write_reg(0x0801, 0x01); CHECKERR;
 #endif /* defined(CONFIG_WIFI) */
 
 	LOG_INF("nPM1300 setup complete");
 	return 0;
 }
 
-static int npm6001_init(void)
-{
-	int err = 0;
-
-#if defined(CONFIG_WIFI)
-	//err = regulator_enable(DEVICE_DT_GET(DT_NODELABEL(regulator_wifi)));
-	// give BUCK3 time to start up
-	k_sleep(K_USEC(300));
-	LOG_INF("nPM6001 setup complete");
-#endif /* defined(CONFIG_WIFI) */
-	return err;
-}
-
 SYS_INIT(npm1300_init, POST_KERNEL, CONFIG_NPM1300_INIT_PRIORITY);
-SYS_INIT(npm6001_init, POST_KERNEL, CONFIG_NPM6001_INIT_PRIORITY);

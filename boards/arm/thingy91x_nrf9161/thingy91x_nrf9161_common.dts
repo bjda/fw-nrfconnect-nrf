@@ -148,6 +148,19 @@
 				regulator-boot-on;
 			};
 		};
+
+		charger {
+			compatible = "nordic,npm1300-charger";
+			term-microvolt = <4200000>;
+			/* Hack to disable charging > 45 degC */
+			term-warm-microvolt = <3000000>;
+			current-microamp = <800000>;
+			dischg-limit-microamp = <1000000>;
+			vbus-limit-microamp = <500000>;
+			thermistor-ohms = <10000>;
+			thermistor-beta = <3380>;
+			charging-enable;
+		};
 	};
 
 	pmic_wifi: npm6001@70 {
