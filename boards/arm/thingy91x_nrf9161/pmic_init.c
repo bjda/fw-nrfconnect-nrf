@@ -61,9 +61,9 @@ static int npm1300_init(void)
 
 
 	// set VBUS current limit 500mA 
-	err = pmic_write_reg(0x0201, 0x00); CHECKERR;
-	err = pmic_write_reg(0x0202, 0x00); CHECKERR;
-	err = pmic_write_reg(0x0200, 0x01); CHECKERR;
+	//err = pmic_write_reg(0x0201, 0x00); CHECKERR;
+	//err = pmic_write_reg(0x0202, 0x00); CHECKERR;
+	//err = pmic_write_reg(0x0200, 0x01); CHECKERR;
 
 	
 	// set RF switch to BLE by default
