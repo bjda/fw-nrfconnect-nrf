@@ -32,7 +32,7 @@ if(GIT_FOUND)
         OUTPUT_STRIP_TRAILING_WHITESPACE
   )
   string(TIMESTAMP CURRENT_DATE "%Y-%m-%d")
-  string(APPEND README_CONTENT "\nFirmware version: ${GIT_HASH} Build date: ${CURRENT_DATE}")
+  string(APPEND README_CONTENT "\nFirmware version: ${GIT_HASH} Build date: ${CURRENT_DATE}\n")
 endif()
 string(REPLACE "\"" "\\\"" README_CONTENT "${README_CONTENT}")
 string(REPLACE "\n" "\\n\"\n\"" README_CONTENT "${README_CONTENT}")
